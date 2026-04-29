@@ -1,0 +1,29 @@
+[project]
+name = "agent-context-mpp"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "eth-utils",
+    "fastapi",
+    "pydantic-settings",
+    "pympp[tempo]",
+]
+
+[dependency-groups]
+dev = [
+    "pyright",
+    "pytest",
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.pyright]
+include = ["app"]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
