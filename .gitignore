@@ -1,0 +1,15 @@
+CLAUDE.md
+.claude/
+.env
+.venv/
+*.db
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
