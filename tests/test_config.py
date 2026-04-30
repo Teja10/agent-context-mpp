@@ -1,0 +1,172 @@
+from dataclasses import dataclass, replace
+from pathlib import Path
+
+import pytest
+
+from app.config import MainnetSafetyError, Settings, TESTNET_PATHUSD_ADDRESS
+
+
+@dataclass(frozen=True)
+class SettingsEnvironment:
+    """Environment values required to construct application settings."""
+
+    environment: str
+    tempo_network: str
+    mainnet_confirmation: str
+    mpp_realm: str
+    mpp_secret_key: str
+    publisher_recipient: str
+    pathusd_address: str
+    database_path: Path
+
+
+def load_settings(
+    monkeypatch: pytest.MonkeyPatch,
+    settings_environment: SettingsEnvironment,
+) -> Settings:
+    """Set every required environment variable and return loaded settings."""
+    monkeypatch.setenv("ENVIRONMENT", settings_environment.environment)
+    monkeypatch.setenv("TEMPO_NETWORK", settings_environment.tempo_network)
+    monkeypatch.setenv(
+        "MAINNET_CONFIRMATION",
+        settings_environment.mainnet_confirmation,
+    )
+    monkeypatch.setenv("MPP_REALM", settings_environment.mpp_realm)
+    monkeypatch.setenv("MPP_SECRET_KEY", settings_environment.mpp_secret_key)
+    monkeypatch.setenv(
+        "PUBLISHER_RECIPIENT",
+        settings_environment.publisher_recipient,
+    )
+    monkeypatch.setenv("PATHUSD_ADDRESS", settings_environment.pathusd_address)
+    monkeypatch.setenv("DATABASE_PATH", str(settings_environment.database_path))
+    return Settings()
+
+
+def valid_mainnet_environment(tmp_path: Path) -> SettingsEnvironment:
+    """Return a fully safe mainnet settings environment."""
+    return SettingsEnvironment(
+        environment="production",
+        tempo_network="mainnet",
+        mainnet_confirmation="true",
+        mpp_realm="agent-context.example",
+        mpp_secret_key="secret-key",
+        publisher_recipient="0x52908400098527886E0F7030069857D2E4169EE7",
+        pathusd_address="0x0000000000000000000000000000000000000001",
+        database_path=tmp_path / "purchases.db",
+    )
+
+
+def test_mainnet_rejects_non_production_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    settings = load_settings(
+        monkeypatch,
+        replace(valid_mainnet_environment(tmp_path), environment="development"),
+    )
+
+    with pytest.raises(
+        MainnetSafetyError,
+        match="ENVIRONMENT must be production on mainnet",
+    ):
+        settings.validate_mainnet_safety()
+
+
+def test_mainnet_rejects_missing_confirmation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    settings = load_settings(
+        monkeypatch,
+        replace(valid_mainnet_environment(tmp_path), mainnet_confirmation="false"),
+    )
+
+    with pytest.raises(
+        MainnetSafetyError,
+        match="MAINNET_CONFIRMATION must be true on mainnet",
+    ):
+        settings.validate_mainnet_safety()
+
+
+def test_mainnet_rejects_local_realm(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    settings = load_settings(
+        monkeypatch,
+        replace(valid_mainnet_environment(tmp_path), mpp_realm="http://localhost"),
+    )
+
+    with pytest.raises(
+        MainnetSafetyError,
+        match="MPP_REALM must not be local on mainnet",
+    ):
+        settings.validate_mainnet_safety()
+
+
+def test_mainnet_rejects_non_checksummed_recipient(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    settings = load_settings(
+        monkeypatch,
+        replace(
+            valid_mainnet_environment(tmp_path),
+            publisher_recipient="0x52908400098527886e0f7030069857d2e4169ee7",
+        ),
+    )
+
+    with pytest.raises(
+        MainnetSafetyError,
+        match="PUBLISHER_RECIPIENT must be EIP-55 checksummed",
+    ):
+        settings.validate_mainnet_safety()
+
+
+def test_mainnet_rejects_testnet_pathusd_address(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    settings = load_settings(
+        monkeypatch,
+        replace(
+            valid_mainnet_environment(tmp_path),
+            pathusd_address=TESTNET_PATHUSD_ADDRESS,
+        ),
+    )
+
+    with pytest.raises(
+        MainnetSafetyError,
+        match="PATHUSD_ADDRESS must not use the testnet default",
+    ):
+        settings.validate_mainnet_safety()
+
+
+def test_mainnet_accepts_safe_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    settings = load_settings(monkeypatch, valid_mainnet_environment(tmp_path))
+
+    settings.validate_mainnet_safety()
+
+
+def test_moderato_skips_mainnet_safety_checks(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    settings = load_settings(
+        monkeypatch,
+        SettingsEnvironment(
+            environment="development",
+            tempo_network="moderato",
+            mainnet_confirmation="false",
+            mpp_realm="http://127.0.0.1",
+            mpp_secret_key="secret-key",
+            publisher_recipient="not-checksummed",
+            pathusd_address=TESTNET_PATHUSD_ADDRESS,
+            database_path=tmp_path / "purchases.db",
+        ),
+    )
+
+    settings.validate_mainnet_safety()
