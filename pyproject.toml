@@ -25,6 +25,9 @@ target-version = "py312"
 line-ending = "lf"
 
 [tool.pyright]
-include = ["app"]
+include = ["app", "tests"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Literal
 
 from eth_utils.address import is_checksum_address
@@ -29,6 +30,7 @@ class Settings(BaseSettings):
     mpp_secret_key: str = Field(alias="MPP_SECRET_KEY")
     publisher_recipient: str = Field(alias="PUBLISHER_RECIPIENT")
     pathusd_address: str = Field(alias="PATHUSD_ADDRESS")
+    database_path: Path = Field(alias="DATABASE_PATH")
 
     def __init__(self) -> None:
         super().__init__()
