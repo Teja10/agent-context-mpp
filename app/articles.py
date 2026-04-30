@@ -150,6 +150,3 @@ def _body(body: str, article_path: Path) -> str:
     if stripped_body == "":
         raise ValueError(f"{article_path.name} body is empty")
     return stripped_body
-
-
-ARTICLES = load_articles(ARTICLES_DIR)

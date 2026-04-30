@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     publisher_recipient: str = Field(alias="PUBLISHER_RECIPIENT")
     pathusd_address: str = Field(alias="PATHUSD_ADDRESS")
 
+    def __init__(self) -> None:
+        super().__init__()
+
     @property
     def chain_id(self) -> int:
         """Return the Tempo chain ID for the configured network."""
