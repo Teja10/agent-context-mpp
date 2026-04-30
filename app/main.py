@@ -6,11 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.articles import ARTICLES_DIR, load_articles
 from app.config import Settings
+from app.db import initialize_database
 from app.routes import articles, health
-
-
-def _initialize_database() -> None:
-    pass
 
 
 @asynccontextmanager
@@ -19,7 +16,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings = Settings()
     settings.validate_mainnet_safety()
     articles.set_articles(load_articles(ARTICLES_DIR))
-    _initialize_database()
+    initialize_database(settings.database_path)
     yield
 
 
