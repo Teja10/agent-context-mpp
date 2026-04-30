@@ -2,6 +2,7 @@ from pydantic import TypeAdapter
 
 from app.db import Purchase, lookup_purchase_by_tx_hash
 from app.models import ArticleMetadata, ContextPackage
+from mpp import Receipt
 from conftest import (
     ARTICLE_SLUG,
     CURRENCY,
@@ -65,6 +66,7 @@ def test_context_without_authorization_returns_payment_challenge(
         ChargeCall(
             authorization=None,
             amount=challenge_client.articles[ARTICLE_SLUG].price,
+            memo="0x4709280c7c375e35bb5c1dc5beba9fd25ddc8743c6959facf650ef0c6e3ab785",
         )
     ]
 
@@ -83,6 +85,10 @@ def test_paid_context_returns_context_package(paid_client: RouteClient) -> None:
     assert context.suggested_citation == article.suggested_citation
     assert context.license == article.license
     assert context.receipt == RECEIPT_PAYLOAD
+    assert (
+        Receipt.from_payment_receipt(response.headers["Payment-Receipt"]).reference
+        == TX_HASH
+    )
 
 
 def test_paid_context_persists_purchase(paid_client: RouteClient) -> None:

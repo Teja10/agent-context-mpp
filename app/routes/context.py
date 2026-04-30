@@ -1,3 +1,4 @@
+from hashlib import sha256
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -36,7 +37,9 @@ def set_context(
 
 
 @router.get("/articles/{slug}/context", response_model=ContextPackage)
-async def get_article_context(slug: str, request: Request) -> ContextPackage | Response:
+async def get_article_context(
+    slug: str, request: Request, response: Response
+) -> ContextPackage | Response:
     """Return paid context for one loaded article."""
     articles = _loaded_articles()
     if slug not in articles:
@@ -45,7 +48,11 @@ async def get_article_context(slug: str, request: Request) -> ContextPackage | R
     mpp = _loaded_mpp()
     article = articles[slug]
     authorization = request.headers.get("Authorization")
-    result = await mpp.charge(authorization, article.price)
+    result = await mpp.charge(
+        authorization,
+        article.price,
+        memo=_context_memo(article.slug),
+    )
     if isinstance(result, Challenge):
         return Response(
             status_code=402,
@@ -53,6 +60,7 @@ async def get_article_context(slug: str, request: Request) -> ContextPackage | R
         )
 
     credential, receipt = result
+    response.headers["Payment-Receipt"] = receipt.to_payment_receipt()
     payer_address = _payer_address(credential.source)
     purchase = insert_purchase(
         _loaded_database_path(),
@@ -116,6 +124,10 @@ def _payer_address(source: str | None) -> str:
     if address == "":
         raise ValueError("Credential source must include a payer address")
     return address
+
+
+def _context_memo(slug: str) -> str:
+    return "0x" + sha256(slug.encode()).hexdigest()
 
 
 def _receipt_payload(receipt: Receipt) -> dict[str, str]:
