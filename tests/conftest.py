@@ -39,6 +39,7 @@ class ChargeCall:
 
     authorization: str | None
     amount: str
+    memo: str
 
 
 @dataclass(frozen=True)
@@ -63,10 +64,12 @@ class FakeMpp:
         self.calls: list[ChargeCall] = []
 
     async def charge(
-        self, authorization: str | None, amount: str
+        self, authorization: str | None, amount: str, *, memo: str
     ) -> Challenge | SuccessfulCharge:
         """Record a charge request and return the configured result."""
-        self.calls.append(ChargeCall(authorization=authorization, amount=amount))
+        self.calls.append(
+            ChargeCall(authorization=authorization, amount=amount, memo=memo)
+        )
         return self.result
 
 
