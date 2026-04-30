@@ -163,7 +163,9 @@ def test_unknown_slug_returns_404_before_charge(tmp_path: Path) -> None:
         fake_mpp,
     )
 
-    response = client.get("/articles/unknown/context", headers={"Authorization": "paid"})
+    response = client.get(
+        "/articles/unknown/context", headers={"Authorization": "paid"}
+    )
 
     assert response.status_code == 404
     assert fake_mpp.calls == []
