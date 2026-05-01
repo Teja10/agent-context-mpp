@@ -3,12 +3,18 @@
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine, RowMapping
 
-from app.db.records import ArticleRecord, OneTimePurchase
-from app.db.schema import articles, metadata, one_time_purchases, wallet_principals
+from app.db.records import ArticleRecord, OneTimePurchase, PublisherRecord
+from app.db.schema import (
+    articles,
+    metadata,
+    one_time_purchases,
+    publishers,
+    wallet_principals,
+)
 from app.models import ArticleMetadata
 
 
@@ -80,18 +86,29 @@ def get_article_by_slug(engine: Engine, slug: str) -> Optional[ArticleRecord]:
     return _article_record(row)
 
 
+def upsert_wallet_principal(engine: Engine, address: str) -> None:
+    """Insert a wallet principal if it does not already exist.
+
+    Args:
+        engine: SQLAlchemy engine.
+        address: Lowercase wallet address.
+    """
+    with engine.begin() as connection:
+        connection.execute(
+            insert(wallet_principals)
+            .values(wallet_address=address, created_at=text("now()"))
+            .on_conflict_do_nothing(index_elements=[wallet_principals.c.wallet_address])
+        )
+
+
 def insert_one_time_purchase(
     engine: Engine,
     purchase: OneTimePurchase,
     article_id: UUID,
 ) -> OneTimePurchase:
     """Persist a wallet principal and one-time purchase."""
+    upsert_wallet_principal(engine, purchase.wallet_address)
     with engine.begin() as connection:
-        connection.execute(
-            insert(wallet_principals)
-            .values(wallet_address=purchase.wallet_address, created_at=text("now()"))
-            .on_conflict_do_nothing(index_elements=[wallet_principals.c.wallet_address])
-        )
         result = connection.execute(
             insert(one_time_purchases)
             .values(
@@ -170,6 +187,50 @@ def _article_record(row: RowMapping) -> ArticleRecord:
         slug=row["slug"],
         body=row["body"],
     )
+
+
+def get_publisher_by_handle(engine: Engine, handle: str) -> Optional[PublisherRecord]:
+    """Return a publisher by its unique handle.
+
+    Args:
+        engine: SQLAlchemy engine.
+        handle: Publisher handle.
+
+    Returns:
+        PublisherRecord if found, None otherwise.
+    """
+    with engine.connect() as connection:
+        row = (
+            connection.execute(select(publishers).where(publishers.c.handle == handle))
+            .mappings()
+            .one_or_none()
+        )
+    if row is None:
+        return None
+    return PublisherRecord(
+        id=row["id"],
+        handle=row["handle"],
+        display_name=row["display_name"],
+        recipient_address=row["recipient_address"],
+    )
+
+
+def update_publisher_display_name(
+    engine: Engine, handle: str, display_name: str
+) -> None:
+    """Update a publisher's display name.
+
+    Args:
+        engine: SQLAlchemy engine.
+        handle: Publisher handle.
+        display_name: New display name.
+    """
+    with engine.begin() as connection:
+        connection.execute(
+            update(publishers)
+            .where(publishers.c.handle == handle)
+            .values(display_name=display_name)
+        )
 
 
 def _one_time_purchase(row: RowMapping) -> OneTimePurchase:

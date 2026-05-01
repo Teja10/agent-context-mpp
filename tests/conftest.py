@@ -16,9 +16,9 @@ from sqlalchemy.engine import Engine
 
 from app.db.queries import create_database_engine, list_articles
 from app.db.records import ArticleRecord
-from app.db.schema import articles, publishers
+from app.db.schema import articles, publishers as publishers_table
 from app.routes import articles as article_routes
-from app.routes import context, health
+from app.routes import auth, context, health, publishers
 from app.state import AppState
 
 ARTICLE_SLUG = "ai-agent-payments"
@@ -61,11 +61,15 @@ class SuccessfulCharge:
         yield self.receipt
 
 
+MPP_SECRET_KEY = "test-secret-key"
+
+
 class FakeMpp:
     """Fake MPP handler that returns a configured charge result."""
 
     def __init__(self, result: Challenge | SuccessfulCharge) -> None:
         self.realm = "agent-context"
+        self.secret_key = MPP_SECRET_KEY
         self.result = result
         self.calls: list[ChargeCall] = []
 
@@ -182,6 +186,17 @@ def purchase_count(engine: Engine) -> int:
         )
 
 
+def wallet_count(engine: Engine) -> int:
+    """Return the number of persisted wallet principals."""
+    with engine.connect() as connection:
+        return cast(
+            int,
+            connection.execute(
+                text("select count(*) from wallet_principals")
+            ).scalar_one(),
+        )
+
+
 def _route_client(
     engine: Engine,
     article_catalog: dict[str, ArticleRecord],
@@ -197,6 +212,8 @@ def _route_client(
     app.include_router(health.router)
     app.include_router(article_routes.router)
     app.include_router(context.router)
+    app.include_router(auth.router)
+    app.include_router(publishers.router)
     return RouteClient(
         client=TestClient(app),
         engine=engine,
@@ -228,7 +245,7 @@ def _insert_article_catalog(engine: Engine) -> None:
     created_at = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
     with engine.begin() as connection:
         connection.execute(
-            insert(publishers).values(
+            insert(publishers_table).values(
                 id=PUBLISHER_ID,
                 handle="agent-context-research",
                 display_name="Agent Context Research",
