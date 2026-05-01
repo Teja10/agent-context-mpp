@@ -1,46 +1,29 @@
-from fastapi import APIRouter, HTTPException
-from sqlalchemy.engine import Engine
+from typing import Annotated
 
-from app.db import ArticleRecord, get_article_by_slug, list_articles as list_db_articles
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.db import get_article_by_slug, list_article_metadata
 from app.models import ArticleMetadata
+from app.state import AppState, get_state
 
 router = APIRouter()
 
-_engine: Engine | None = None
-
-
-def set_engine(engine: Engine) -> None:
-    """Set article route database resources loaded during startup."""
-    global _engine
-    _engine = engine
-
 
 @router.get("/articles")
-async def list_articles() -> list[ArticleMetadata]:
+def get_articles(
+    state: Annotated[AppState, Depends(get_state)],
+) -> list[ArticleMetadata]:
     """Return public metadata for all stored articles."""
-    return [_metadata(article) for article in list_db_articles(_loaded_engine())]
+    return list_article_metadata(state.engine)
 
 
 @router.get("/articles/{slug}")
-async def get_article(slug: str) -> ArticleMetadata:
+def get_article(
+    slug: str,
+    state: Annotated[AppState, Depends(get_state)],
+) -> ArticleMetadata:
     """Return public metadata for one stored article."""
-    article = get_article_by_slug(_loaded_engine(), slug)
+    article = get_article_by_slug(state.engine, slug)
     if article is None:
         raise HTTPException(status_code=404, detail="Article not found")
-    return _metadata(article)
-
-
-def _loaded_engine() -> Engine:
-    if _engine is None:
-        raise RuntimeError("Database engine was not loaded during startup")
-    return _engine
-
-
-def _metadata(article: ArticleRecord) -> ArticleMetadata:
-    return ArticleMetadata(
-        title=article.title,
-        author=article.author,
-        published_date=article.published_date,
-        price=str(article.price),
-        slug=article.slug,
-    )
+    return article.metadata

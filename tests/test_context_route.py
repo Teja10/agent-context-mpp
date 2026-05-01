@@ -2,6 +2,7 @@ import pytest
 
 from app.db import OneTimePurchase, insert_one_time_purchase
 from conftest import (
+    ARTICLE_ID,
     ARTICLE_SLUG,
     CONTEXT_SLUG,
     CURRENCY,
@@ -35,6 +36,7 @@ def test_duplicate_payment_reference_for_different_slug_hard_fails(
             network=NETWORK,
             receipt={"status": "original"},
         ),
+        ARTICLE_ID,
     )
 
     with pytest.raises(

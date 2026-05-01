@@ -8,6 +8,7 @@ from app.config import Settings
 from app.db import create_database_engine, verify_database
 from app.mpp_setup import create_mpp
 from app.routes import articles, context, health
+from app.state import AppState
 
 
 @asynccontextmanager
@@ -17,12 +18,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings.validate_mainnet_safety()
     engine = create_database_engine(settings.database_url)
     verify_database(engine)
-    articles.set_engine(engine)
-    context.set_context(
-        engine,
-        create_mpp(settings),
-        settings.pathusd_address,
-        settings.tempo_network,
+    app.state.ctx = AppState(
+        engine=engine,
+        mpp=create_mpp(settings),
+        pathusd_address=settings.pathusd_address,
+        tempo_network=settings.tempo_network,
     )
     try:
         yield

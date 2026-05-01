@@ -23,6 +23,7 @@ from app.db import (
 )
 from app.routes import articles as article_routes
 from app.routes import context, health
+from app.state import AppState
 
 ARTICLE_SLUG = "ai-agent-payments"
 CONTEXT_SLUG = "context-for-machines"
@@ -190,14 +191,13 @@ def _route_client(
     article_catalog: dict[str, ArticleRecord],
     fake_mpp: FakeMpp,
 ) -> RouteClient:
-    article_routes.set_engine(engine)
-    context.set_context(
+    app = FastAPI()
+    app.state.ctx = AppState(
         engine=engine,
         mpp=cast(Mpp, fake_mpp),
-        currency=CURRENCY,
-        network=NETWORK,
+        pathusd_address=CURRENCY,
+        tempo_network=NETWORK,
     )
-    app = FastAPI()
     app.include_router(health.router)
     app.include_router(article_routes.router)
     app.include_router(context.router)
@@ -248,9 +248,6 @@ def _insert_article_catalog(engine: Engine) -> None:
                     ARTICLE_SLUG,
                     "AI Agent Payments",
                     Decimal("0.25"),
-                    "Payment context summary.",
-                    ["Payment claim."],
-                    ["Payment excerpt."],
                     created_at,
                 ),
                 _article_values(
@@ -258,9 +255,6 @@ def _insert_article_catalog(engine: Engine) -> None:
                     CONTEXT_SLUG,
                     "Context for Machines",
                     Decimal("1.25"),
-                    "Machine context summary.",
-                    ["Machine claim."],
-                    ["Machine excerpt."],
                     created_at,
                 ),
                 _article_values(
@@ -268,9 +262,6 @@ def _insert_article_catalog(engine: Engine) -> None:
                     "decentralized-identity",
                     "Decentralized Identity",
                     Decimal("0.75"),
-                    "Identity summary.",
-                    ["Identity claim."],
-                    ["Identity excerpt."],
                     created_at,
                 ),
             ],
@@ -282,9 +273,6 @@ def _article_values(
     slug: str,
     title: str,
     price: Decimal,
-    summary: str,
-    key_claims: list[str],
-    allowed_excerpts: list[str],
     created_at: datetime,
 ) -> dict[str, object]:
     return {
@@ -296,10 +284,10 @@ def _article_values(
         "published_at": date(2026, 4, 29),
         "price": price,
         "license": "Context preview license",
-        "summary": summary,
+        "summary": f"{title} summary.",
         "tags": ["mpp"],
-        "key_claims": key_claims,
-        "allowed_excerpts": allowed_excerpts,
+        "key_claims": [f"{title} claim."],
+        "allowed_excerpts": [f"{title} excerpt."],
         "suggested_citation": f"{title}.",
         "body": f"{title} body.",
         "created_at": created_at,

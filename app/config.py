@@ -11,10 +11,9 @@ MAINNET_CHAIN_ID = 4217
 MODERATO_CHAIN_ID = 42431
 MAINNET_RPC_URL = "https://rpc.tempo.xyz"
 MODERATO_RPC_URL = "https://rpc.moderato.tempo.xyz"
-MAINNET_EXPLORER_URL = "https://explore.tempo.xyz"
-MODERATO_EXPLORER_URL = "https://explore.tempo.xyz"
+EXPLORER_URL = "https://explore.tempo.xyz"
 TESTNET_PATHUSD_ADDRESS = "0x20c0000000000000000000000000000000000000"
-REMOVED_FILE_DATABASE_KEY = "DATABASE" + "_PATH"
+REMOVED_FILE_DATABASE_KEY = "DATABASE_PATH"
 
 
 class MainnetSafetyError(RuntimeError):
@@ -57,9 +56,7 @@ class Settings(BaseSettings):
     @property
     def explorer_url(self) -> str:
         """Return the explorer URL for the configured network."""
-        if self.tempo_network == "mainnet":
-            return MAINNET_EXPLORER_URL
-        return MODERATO_EXPLORER_URL
+        return EXPLORER_URL
 
     def validate_mainnet_safety(self) -> None:
         """Validate explicit safeguards before allowing mainnet operation."""
