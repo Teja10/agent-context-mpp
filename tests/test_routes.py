@@ -106,7 +106,7 @@ def test_paid_context_persists_purchase(paid_client: RouteClient) -> None:
         wallet_address="0xpayer",
         payment_reference=TX_HASH,
         amount=article.price,
-        currency=CURRENCY,
+        currency=CURRENCY.address,
         network=NETWORK,
         receipt=RECEIPT_PAYLOAD,
     )

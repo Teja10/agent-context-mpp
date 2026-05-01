@@ -33,7 +33,7 @@ def test_duplicate_payment_reference_for_different_slug_hard_fails(
             wallet_address="0xoriginal",
             payment_reference=TX_HASH,
             amount=paid_client.articles[ARTICLE_SLUG].price,
-            currency=CURRENCY,
+            currency=CURRENCY.address,
             network=NETWORK,
             receipt={"status": "original"},
         ),

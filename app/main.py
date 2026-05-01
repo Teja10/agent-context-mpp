@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.ctx = AppState(
         engine=engine,
         mpp=create_mpp(settings),
-        pathusd_address=settings.pathusd_address,
+        currency=settings.payment_currency,
         tempo_network=settings.tempo_network,
     )
     try:

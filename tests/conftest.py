@@ -17,6 +17,7 @@ from sqlalchemy.engine import Engine
 from app.db.queries import create_database_engine, list_articles
 from app.db.records import ArticleRecord
 from app.db.schema import articles, publishers as publishers_table
+from app.payment_currency import TokenInfo
 from app.routes import articles as article_routes
 from app.routes import auth, context, health, publishers
 from app.state import AppState
@@ -24,7 +25,11 @@ from app.state import AppState
 ARTICLE_SLUG = "ai-agent-payments"
 CONTEXT_SLUG = "context-for-machines"
 TX_HASH = "0xtx"
-CURRENCY = "PATHUSD"
+CURRENCY = TokenInfo(
+    symbol="USDC.e",
+    address="0x20c000000000000000000000b9537d11c60e8b50",
+    decimals=6,
+)
 NETWORK = "tempo"
 PAID_HEADERS = {"Authorization": "paid"}
 RECEIPT_PAYLOAD = {
@@ -206,7 +211,7 @@ def _route_client(
     app.state.ctx = AppState(
         engine=engine,
         mpp=cast(Mpp, fake_mpp),
-        pathusd_address=CURRENCY,
+        currency=CURRENCY,
         tempo_network=NETWORK,
     )
     app.include_router(health.router)
