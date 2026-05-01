@@ -5,12 +5,13 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
+from app.payment_currency import TokenInfo, resolve
+
 MAINNET_CHAIN_ID = 4217
 MODERATO_CHAIN_ID = 42431
 MAINNET_RPC_URL = "https://rpc.tempo.xyz"
 MODERATO_RPC_URL = "https://rpc.moderato.tempo.xyz"
 EXPLORER_URL = "https://explore.tempo.xyz"
-TESTNET_PATHUSD_ADDRESS = "0x20c0000000000000000000000000000000000000"
 
 
 class MainnetSafetyError(RuntimeError):
@@ -28,7 +29,7 @@ class Settings(BaseSettings):
     mpp_realm: str = Field(alias="MPP_REALM")
     mpp_secret_key: str = Field(alias="MPP_SECRET_KEY")
     publisher_recipient: str = Field(alias="PUBLISHER_RECIPIENT")
-    pathusd_address: str = Field(alias="PATHUSD_ADDRESS")
+    payment_currency_address: str = Field(alias="PAYMENT_CURRENCY_ADDRESS")
     database_url: str = Field(alias="DATABASE_URL")
 
     def __init__(self) -> None:
@@ -42,6 +43,17 @@ class Settings(BaseSettings):
         if url.drivername != "postgresql+psycopg":
             raise ValueError("DATABASE_URL must use postgresql+psycopg")
         return self
+
+    @model_validator(mode="after")
+    def validate_payment_currency(self) -> "Settings":
+        """Validate that payment_currency_address is in the token registry."""
+        resolve(self.tempo_network, self.payment_currency_address)
+        return self
+
+    @property
+    def payment_currency(self) -> TokenInfo:
+        """Return the resolved token for the configured currency address."""
+        return resolve(self.tempo_network, self.payment_currency_address)
 
     @property
     def chain_id(self) -> int:
@@ -75,5 +87,5 @@ class Settings(BaseSettings):
             raise MainnetSafetyError("MPP_REALM must not be local on mainnet")
         if not is_checksum_address(self.publisher_recipient):
             raise MainnetSafetyError("PUBLISHER_RECIPIENT must be EIP-55 checksummed")
-        if self.pathusd_address.lower() == TESTNET_PATHUSD_ADDRESS:
-            raise MainnetSafetyError("PATHUSD_ADDRESS must not use the testnet default")
+        if self.payment_currency.symbol == "pathUSD":
+            raise MainnetSafetyError("Payment currency must not be pathUSD on mainnet")

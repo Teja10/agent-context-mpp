@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from app.config import MainnetSafetyError, Settings, TESTNET_PATHUSD_ADDRESS
+from app.config import MainnetSafetyError, Settings
+from app.payment_currency import MAINNET_PATHUSD_ADDRESS
 
 
 @dataclass(frozen=True)
@@ -16,7 +17,7 @@ class SettingsEnvironment:
     mpp_realm: str
     mpp_secret_key: str
     publisher_recipient: str
-    pathusd_address: str
+    payment_currency_address: str
     database_url: str
 
 
@@ -39,7 +40,10 @@ def load_settings(
         "PUBLISHER_RECIPIENT",
         settings_environment.publisher_recipient,
     )
-    monkeypatch.setenv("PATHUSD_ADDRESS", settings_environment.pathusd_address)
+    monkeypatch.setenv(
+        "PAYMENT_CURRENCY_ADDRESS",
+        settings_environment.payment_currency_address,
+    )
     monkeypatch.setenv("DATABASE_URL", settings_environment.database_url)
     return Settings()
 
@@ -53,7 +57,7 @@ def valid_mainnet_environment() -> SettingsEnvironment:
         mpp_realm="agent-context.example",
         mpp_secret_key="secret-key",
         publisher_recipient="0x52908400098527886E0F7030069857D2E4169EE7",
-        pathusd_address="0x0000000000000000000000000000000000000001",
+        payment_currency_address="0x20c000000000000000000000b9537d11c60e8b50",
         database_url="postgresql+psycopg://thoth:thoth@127.0.0.1:55432/thoth_test",
     )
 
@@ -129,7 +133,7 @@ def test_mainnet_rejects_non_checksummed_recipient(
         settings.validate_mainnet_safety()
 
 
-def test_mainnet_rejects_testnet_pathusd_address(
+def test_mainnet_rejects_pathusd_symbol(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -138,13 +142,13 @@ def test_mainnet_rejects_testnet_pathusd_address(
         tmp_path,
         replace(
             valid_mainnet_environment(),
-            pathusd_address=TESTNET_PATHUSD_ADDRESS,
+            payment_currency_address=MAINNET_PATHUSD_ADDRESS,
         ),
     )
 
     with pytest.raises(
         MainnetSafetyError,
-        match="PATHUSD_ADDRESS must not use the testnet default",
+        match="Payment currency must not be pathUSD on mainnet",
     ):
         settings.validate_mainnet_safety()
 
@@ -172,7 +176,7 @@ def test_moderato_skips_mainnet_safety_checks(
             mpp_realm="http://127.0.0.1",
             mpp_secret_key="secret-key",
             publisher_recipient="not-checksummed",
-            pathusd_address=TESTNET_PATHUSD_ADDRESS,
+            payment_currency_address=MAINNET_PATHUSD_ADDRESS,
             database_url="postgresql+psycopg://thoth:thoth@127.0.0.1:55432/thoth_test",
         ),
     )
@@ -203,3 +207,37 @@ def test_settings_rejects_unknown_dotenv_key(
 
     with pytest.raises(ValueError, match="Extra inputs are not permitted"):
         load_settings(monkeypatch, tmp_path, valid_mainnet_environment())
+
+
+def test_rejects_unknown_currency_address(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="Unsupported currency address"):
+        load_settings(
+            monkeypatch,
+            tmp_path,
+            replace(
+                valid_mainnet_environment(),
+                payment_currency_address="0x0000000000000000000000000000000000000099",
+            ),
+        )
+
+
+def test_rejects_network_mismatch_currency(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    moderato_env = SettingsEnvironment(
+        environment="development",
+        tempo_network="moderato",
+        mainnet_confirmation="false",
+        mpp_realm="http://127.0.0.1",
+        mpp_secret_key="secret-key",
+        publisher_recipient="not-checksummed",
+        payment_currency_address="0x20c00000000000000000000014f22ca97301eb73",
+        database_url="postgresql+psycopg://thoth:thoth@127.0.0.1:55432/thoth_test",
+    )
+
+    with pytest.raises(ValueError, match="Unsupported currency address"):
+        load_settings(monkeypatch, tmp_path, moderato_env)

@@ -7,6 +7,8 @@ from fastapi import Request
 from mpp.server.mpp import Mpp
 from sqlalchemy.engine import Engine
 
+from app.payment_currency import TokenInfo
+
 
 @dataclass(frozen=True)
 class AppState:
@@ -14,7 +16,7 @@ class AppState:
 
     engine: Engine
     mpp: Mpp
-    pathusd_address: str
+    currency: TokenInfo
     tempo_network: str
 
 

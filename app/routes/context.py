@@ -49,7 +49,7 @@ async def get_article_context(
             wallet_address=payer_address,
             payment_reference=receipt.reference,
             amount=article.price,
-            currency=state.pathusd_address,
+            currency=state.currency.address,
             network=state.tempo_network,
             receipt=_receipt_payload(receipt),
         ),
