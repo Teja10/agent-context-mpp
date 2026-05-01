@@ -15,7 +15,6 @@ class SettingsEnvironment:
     mainnet_confirmation: str
     mpp_realm: str
     mpp_secret_key: str
-    publisher_recipient: str
     pathusd_address: str
     database_url: str
 
@@ -35,10 +34,6 @@ def load_settings(
     )
     monkeypatch.setenv("MPP_REALM", settings_environment.mpp_realm)
     monkeypatch.setenv("MPP_SECRET_KEY", settings_environment.mpp_secret_key)
-    monkeypatch.setenv(
-        "PUBLISHER_RECIPIENT",
-        settings_environment.publisher_recipient,
-    )
     monkeypatch.setenv("PATHUSD_ADDRESS", settings_environment.pathusd_address)
     monkeypatch.setenv("DATABASE_URL", settings_environment.database_url)
     return Settings()
@@ -52,7 +47,6 @@ def valid_mainnet_environment() -> SettingsEnvironment:
         mainnet_confirmation="true",
         mpp_realm="agent-context.example",
         mpp_secret_key="secret-key",
-        publisher_recipient="0x52908400098527886E0F7030069857D2E4169EE7",
         pathusd_address="0x0000000000000000000000000000000000000001",
         database_url="postgresql+psycopg://thoth:thoth@127.0.0.1:55432/thoth_test",
     )
@@ -109,26 +103,6 @@ def test_mainnet_rejects_local_realm(
         settings.validate_mainnet_safety()
 
 
-def test_mainnet_rejects_non_checksummed_recipient(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = load_settings(
-        monkeypatch,
-        tmp_path,
-        replace(
-            valid_mainnet_environment(),
-            publisher_recipient="0x52908400098527886e0f7030069857d2e4169ee7",
-        ),
-    )
-
-    with pytest.raises(
-        MainnetSafetyError,
-        match="PUBLISHER_RECIPIENT must be EIP-55 checksummed",
-    ):
-        settings.validate_mainnet_safety()
-
-
 def test_mainnet_rejects_testnet_pathusd_address(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -171,7 +145,6 @@ def test_moderato_skips_mainnet_safety_checks(
             mainnet_confirmation="false",
             mpp_realm="http://127.0.0.1",
             mpp_secret_key="secret-key",
-            publisher_recipient="not-checksummed",
             pathusd_address=TESTNET_PATHUSD_ADDRESS,
             database_url="postgresql+psycopg://thoth:thoth@127.0.0.1:55432/thoth_test",
         ),

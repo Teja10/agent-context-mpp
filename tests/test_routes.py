@@ -9,6 +9,7 @@ from conftest import (
     CURRENCY,
     NETWORK,
     PAID_HEADERS,
+    PUBLISHER_RECIPIENT,
     RECEIPT_PAYLOAD,
     TX_HASH,
     ChargeCall,
@@ -37,6 +38,7 @@ def test_articles_returns_metadata(challenge_client: RouteClient) -> None:
         "ai-agent-payments",
         "context-for-machines",
         "decentralized-identity",
+        "publisher-b-article",
     ]
 
 
@@ -67,6 +69,7 @@ def test_context_without_authorization_returns_payment_challenge(
             authorization=None,
             amount=str(challenge_client.articles[ARTICLE_SLUG].price),
             memo="0x4709280c7c375e35bb5c1dc5beba9fd25ddc8743c6959facf650ef0c6e3ab785",
+            recipient=PUBLISHER_RECIPIENT,
         )
     ]
 
@@ -108,6 +111,7 @@ def test_paid_context_persists_purchase(paid_client: RouteClient) -> None:
         amount=article.price,
         currency=CURRENCY,
         network=NETWORK,
+        recipient_wallet=PUBLISHER_RECIPIENT.lower(),
         receipt=RECEIPT_PAYLOAD,
     )
 

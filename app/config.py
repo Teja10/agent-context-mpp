@@ -1,6 +1,5 @@
 from typing import Literal
 
-from eth_utils.address import is_checksum_address
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
@@ -27,7 +26,6 @@ class Settings(BaseSettings):
     mainnet_confirmation: bool = Field(alias="MAINNET_CONFIRMATION")
     mpp_realm: str = Field(alias="MPP_REALM")
     mpp_secret_key: str = Field(alias="MPP_SECRET_KEY")
-    publisher_recipient: str = Field(alias="PUBLISHER_RECIPIENT")
     pathusd_address: str = Field(alias="PATHUSD_ADDRESS")
     database_url: str = Field(alias="DATABASE_URL")
 
@@ -73,7 +71,5 @@ class Settings(BaseSettings):
         mpp_realm = self.mpp_realm.lower()
         if "localhost" in mpp_realm or "127.0.0.1" in mpp_realm:
             raise MainnetSafetyError("MPP_REALM must not be local on mainnet")
-        if not is_checksum_address(self.publisher_recipient):
-            raise MainnetSafetyError("PUBLISHER_RECIPIENT must be EIP-55 checksummed")
         if self.pathusd_address.lower() == TESTNET_PATHUSD_ADDRESS:
             raise MainnetSafetyError("PATHUSD_ADDRESS must not use the testnet default")
