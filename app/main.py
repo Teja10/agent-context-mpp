@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import Settings
 from app.db.queries import create_database_engine, verify_database
 from app.mpp_setup import create_mpp
-from app.routes import articles, context, health
+from app.routes import articles, auth, context, health, publishers
 from app.state import AppState
 
 
@@ -34,9 +34,11 @@ app = FastAPI(title="Thoth API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST", "PATCH"],
     allow_headers=["*"],
 )
 app.include_router(health.router)
 app.include_router(articles.router)
 app.include_router(context.router)
+app.include_router(auth.router)
+app.include_router(publishers.router)

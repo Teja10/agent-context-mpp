@@ -1,9 +1,10 @@
 from hashlib import sha256
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from mpp import Challenge, Receipt
 
+from app.auth import parse_wallet_address
 from app.db.queries import get_article_by_slug, insert_one_time_purchase
 from app.db.records import OneTimePurchase
 from app.models import ContextPackage
@@ -38,7 +39,9 @@ async def get_article_context(
 
     credential, receipt = result
     response.headers["Payment-Receipt"] = receipt.to_payment_receipt()
-    payer_address = _payer_address(credential.source)
+    if credential.source is None:
+        raise ValueError("Credential source missing after successful charge")
+    payer_address = parse_wallet_address(credential.source)
     purchase = insert_one_time_purchase(
         state.engine,
         OneTimePurchase(
@@ -60,15 +63,6 @@ async def get_article_context(
         license=article.license,
         receipt=purchase.receipt,
     )
-
-
-def _payer_address(source: Optional[str]) -> str:
-    if source is None or source == "":
-        raise ValueError("Credential source is required")
-    address = source.rsplit(":", maxsplit=1)[-1]
-    if address == "":
-        raise ValueError("Credential source must include a payer address")
-    return address
 
 
 def _context_memo(slug: str) -> str:

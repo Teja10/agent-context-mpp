@@ -9,6 +9,16 @@ from app.models import ArticleMetadata
 
 
 @dataclass(frozen=True)
+class PublisherRecord:
+    """Publisher loaded from Postgres."""
+
+    id: UUID
+    handle: str
+    display_name: str
+    recipient_address: str
+
+
+@dataclass(frozen=True)
 class ArticleRecord:
     """Article content loaded from Postgres."""
 
