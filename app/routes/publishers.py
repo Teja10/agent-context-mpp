@@ -1,7 +1,7 @@
 """Publisher CRUD endpoints with wallet principal ownership."""
 
 from decimal import Decimal
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -40,7 +40,7 @@ class PatchPublisher(BaseModel):
     display_name: Optional[str] = None
     description: Optional[str] = None
     recipient_address: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[Literal["active", "disabled"]] = None
     default_article_price: Optional[Decimal] = None
     default_subscription_price: Optional[Decimal] = None
 
@@ -141,6 +141,8 @@ def patch_publisher(
             422 if no fields provided.
     """
     values = body.model_dump(exclude_none=True)
+    if "recipient_address" in values:
+        values["recipient_address"] = str(values["recipient_address"]).lower()
     if len(values) == 0:
         raise HTTPException(status_code=422, detail="No fields to update")
     publisher = get_publisher_by_handle(state.engine, handle)
