@@ -206,3 +206,13 @@ def test_settings_rejects_removed_database_path(
         match="DATABASE_PATH has been removed; use DATABASE_URL",
     ):
         load_settings(monkeypatch, tmp_path, valid_mainnet_environment())
+
+
+def test_settings_rejects_unknown_dotenv_key(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tmp_path.joinpath(".env").write_text("UNEXPECTED_KEY=value\n")
+
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        load_settings(monkeypatch, tmp_path, valid_mainnet_environment())

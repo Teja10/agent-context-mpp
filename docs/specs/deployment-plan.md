@@ -5,7 +5,7 @@
 Thoth should go live in two tracks:
 
 - A public testnet deployment that proves the current FastAPI app can run behind
-  a real URL and emit the expected MPP payment challenge.
+  a real URL with a migrated Postgres schema.
 - A production deployment for the target Next.js frontend, FastAPI backend, and
   Postgres-backed marketplace.
 
@@ -24,7 +24,7 @@ AWS only when the operational control is worth the extra infrastructure.
 
 ## Deployment Goals
 
-- Make the current demo reachable at a public testnet URL.
+- Make the current API reachable at a public testnet URL.
 - Support the future production web app without changing the product
   architecture.
 - Keep frontend, backend, and database environments clearly separated.
@@ -117,7 +117,8 @@ Rules:
 
 - Staging database can be reset.
 - Staging must have realistic publisher/article/payment test data.
-- Staging must run the real MPP payment challenge path.
+- Staging must run the real MPP payment challenge path once paid article rows
+  exist.
 
 ### Production
 
@@ -259,7 +260,7 @@ The realm must match the public API host that agents and payment clients use.
 
 ## Deployment Phases
 
-### Phase 0: Public Testnet Demo
+### Phase 0: Public Testnet Deployment
 
 Goal: get the current FastAPI app publicly reachable without claiming
 production durability.
@@ -274,17 +275,18 @@ Tasks:
 - Set `DATABASE_URL` to the staging Postgres connection string.
 - Set `MPP_REALM` to the Render or staging API domain.
 - Confirm `/health` returns ok.
-- Confirm `/articles` returns the demo articles.
-- Confirm unauthenticated `/articles/ai-agent-payments/context` returns `402`
-  with `WWW-Authenticate`.
-- Complete Tempo wallet readiness and run a real testnet `tempo request`.
+- Confirm migrations created the Postgres schema.
+- Confirm `/articles` returns an empty list on a fresh database.
+- Confirm article rows require the future publisher/article API work.
+- Complete Tempo wallet readiness.
 
 Exit criteria:
 
 - Public URL exists.
-- 402 challenge is visible over HTTPS.
-- Testnet paid request works or the wallet/funding blocker is documented with
-  exact failing command and output.
+- Health succeeds over HTTPS.
+- Fresh Postgres schema exists with no article rows.
+- Wallet readiness works or the wallet/funding blocker is documented with exact
+  failing command and output.
 
 ### Phase 1: Production Persistence Foundation
 
@@ -382,27 +384,26 @@ Exit criteria:
 ```bash
 curl -fsS https://api-staging.thoth.so/health
 curl -fsS https://api-staging.thoth.so/articles
-curl -i https://api-staging.thoth.so/articles/ai-agent-payments/context
 ```
 
 Expected:
 
 - Health returns ok.
-- Articles returns public metadata.
-- Context endpoint returns `402 Payment Required` without authorization.
+- Articles returns an empty list on a fresh database.
+- Article-specific paid context is unavailable until publisher/article APIs
+  create article rows.
 
 ### Tempo Testnet
 
 ```bash
 tempo wallet whoami
-tempo request GET https://api-staging.thoth.so/articles/ai-agent-payments/context
 ```
 
 Expected:
 
 - Wallet is ready.
-- Request completes payment on testnet.
-- Backend returns paid context and records receipt.
+- Paid article requests require future publisher/article APIs to create article
+  rows first.
 
 ### Frontend Staging
 
@@ -523,14 +524,14 @@ Deliverables:
 - Render staging backend.
 - Public staging API domain.
 - Testnet environment configuration.
-- Public 402 challenge smoke test.
+- Postgres migration smoke test.
 
 Acceptance criteria:
 
 - `/health` succeeds over HTTPS.
-- `/articles` succeeds over HTTPS.
-- Paid context endpoint emits expected `402`.
-- Tempo testnet paid request is either successful or blocked only by documented
+- `/articles` returns an empty list on a fresh database.
+- AGE-10 schema exists in Postgres.
+- Tempo wallet readiness is either successful or blocked only by documented
   wallet/funding state.
 
 ### Deployment M2: Durable Backend Runtime

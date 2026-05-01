@@ -24,7 +24,7 @@ class MainnetSafetyError(RuntimeError):
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="forbid")
 
     environment: str = Field(alias="ENVIRONMENT")
     tempo_network: Literal["mainnet", "moderato"] = Field(alias="TEMPO_NETWORK")

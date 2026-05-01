@@ -15,7 +15,7 @@ demo backend.
 
 The current backend is a compact demo:
 
-- `app/articles.py` loads Markdown files from `articles/`.
+- Article metadata and context are read from Postgres-backed article rows.
 - `app/routes/articles.py` exposes public article metadata.
 - `app/routes/context.py` exposes paid structured context through MPP.
 - `app/db.py` stores articles, wallet principals, purchases, subscriptions,
@@ -534,7 +534,7 @@ Acceptance criteria:
 
 - Production API uses Postgres.
 - Schema constraints enforce publisher/article/payment uniqueness.
-- Existing demo articles can be represented in the new article model.
+- Article rows can represent the fields needed by existing public route shapes.
 
 ### Backend M2: Publisher Markdown Publishing
 

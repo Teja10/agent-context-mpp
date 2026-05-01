@@ -1,11 +1,11 @@
 # agent-context-mpp
 
-Thoth is a FastAPI demo for paid machine-readable article context. It
-serves public article metadata for humans and agents, then protects the
-structured context package behind an MPP payment challenge.
+Thoth is a FastAPI API for paid machine-readable article context. It serves
+public article metadata for humans and agents, then protects structured context
+packages behind MPP payment challenges once articles exist in Postgres.
 
-The included demo targets Tempo moderato/testnet through `.env.example`. The
-paid request step requires a funded Tempo wallet.
+The included configuration targets Tempo moderato/testnet through
+`.env.example`.
 
 ## Prerequisites
 
@@ -47,24 +47,8 @@ uv run alembic upgrade head
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-## Testnet Demo
-
-Use two terminals.
-
-Terminal 1 runs the API server:
-
-```bash
-uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-Terminal 2 runs the demo script:
-
-```bash
-./scripts/demo_testnet.sh
-```
-
-The script checks the wallet, shows the raw 402 payment challenge from `curl`,
-then repeats the request with `tempo request`.
+Fresh migrations create schema only. Article creation is owned by a later
+publisher workflow, so a new database has no paid article route to demo yet.
 
 ## Tests
 
