@@ -1,96 +1,81 @@
-from pathlib import Path
-import sqlite3
+from decimal import Decimal
+
+import pytest
+from sqlalchemy.engine import Engine
 
 from app.db import (
-    Purchase,
-    initialize_database,
-    insert_purchase,
-    lookup_purchase_by_tx_hash,
+    OneTimePurchase,
+    insert_one_time_purchase,
+    list_articles,
+    lookup_purchase_by_payment_reference,
 )
+from conftest import ARTICLE_SLUG, RECEIPT_PAYLOAD, TX_HASH, purchase_count
 
 
-def purchase() -> Purchase:
+def purchase() -> OneTimePurchase:
     """Return a purchase record for storage tests."""
-    return Purchase(
-        article_slug="context-for-machines",
-        payer_address="0xpayer",
-        tx_hash="0xtx",
-        amount="1.25",
+    return OneTimePurchase(
+        article_slug=ARTICLE_SLUG,
+        wallet_address="0xpayer",
+        payment_reference=TX_HASH,
+        amount=Decimal("1.25"),
         currency="PATHUSD",
-        network="base",
-        receipt_json='{"status":"ok"}',
+        network="tempo",
+        receipt=RECEIPT_PAYLOAD,
     )
 
 
-def test_initialize_database_creates_purchase_schema(tmp_path: Path) -> None:
-    database_path = tmp_path / "purchases.db"
+def test_list_articles_returns_seeded_postgres_articles(engine: Engine) -> None:
+    articles = list_articles(engine)
 
-    initialize_database(database_path)
-
-    with sqlite3.connect(database_path) as connection:
-        connection.row_factory = sqlite3.Row
-        columns = connection.execute("PRAGMA table_info(purchases)").fetchall()
-
-    column_names = [column["name"] for column in columns]
-    assert column_names == [
-        "id",
-        "article_slug",
-        "payer_address",
-        "tx_hash",
-        "amount",
-        "currency",
-        "network",
-        "receipt_json",
-        "created_at",
+    assert [article.slug for article in articles] == [
+        "ai-agent-payments",
+        "context-for-machines",
+        "decentralized-identity",
     ]
+    assert articles[0].key_claims == ["Payment claim."]
 
 
-def test_insert_purchase_stores_amount_as_text(tmp_path: Path) -> None:
-    database_path = tmp_path / "purchases.db"
+def test_insert_purchase_stores_decimal_and_jsonb(engine: Engine) -> None:
     stored_purchase = purchase()
 
-    initialize_database(database_path)
-    insert_purchase(database_path, stored_purchase)
-
-    with sqlite3.connect(database_path) as connection:
-        connection.row_factory = sqlite3.Row
-        row = connection.execute(
-            "SELECT amount, typeof(amount) AS amount_type FROM purchases WHERE tx_hash = ?",
-            [stored_purchase.tx_hash],
-        ).fetchone()
-
-    assert row is not None
-    assert row["amount"] == "1.25"
-    assert row["amount_type"] == "text"
-
-
-def test_lookup_purchase_by_tx_hash_returns_persisted_purchase(tmp_path: Path) -> None:
-    database_path = tmp_path / "purchases.db"
-    stored_purchase = purchase()
-
-    initialize_database(database_path)
-    insert_purchase(database_path, stored_purchase)
+    insert_one_time_purchase(engine, stored_purchase)
 
     assert (
-        lookup_purchase_by_tx_hash(database_path, stored_purchase.tx_hash)
+        lookup_purchase_by_payment_reference(engine, stored_purchase.payment_reference)
         == stored_purchase
     )
 
 
-def test_duplicate_tx_hash_returns_existing_persisted_purchase(tmp_path: Path) -> None:
-    database_path = tmp_path / "purchases.db"
-    existing_purchase = purchase()
-    duplicate_purchase = Purchase(
-        article_slug="ai-agent-payments",
-        payer_address="0xother",
-        tx_hash=existing_purchase.tx_hash,
-        amount="9.99",
+def test_same_payment_reference_replay_returns_existing_purchase(
+    engine: Engine,
+) -> None:
+    stored_purchase = purchase()
+
+    insert_one_time_purchase(engine, stored_purchase)
+
+    assert insert_one_time_purchase(engine, stored_purchase) == stored_purchase
+    assert purchase_count(engine) == 1
+
+
+def test_duplicate_payment_reference_for_different_article_hard_fails(
+    engine: Engine,
+) -> None:
+    stored_purchase = purchase()
+    duplicate_purchase = OneTimePurchase(
+        article_slug="context-for-machines",
+        wallet_address="0xother",
+        payment_reference=stored_purchase.payment_reference,
+        amount=Decimal("9.99"),
         currency="PATHUSD",
-        network="base",
-        receipt_json='{"status":"duplicate"}',
+        network="tempo",
+        receipt={"status": "duplicate"},
     )
 
-    initialize_database(database_path)
-    insert_purchase(database_path, existing_purchase)
+    insert_one_time_purchase(engine, stored_purchase)
 
-    assert insert_purchase(database_path, duplicate_purchase) == existing_purchase
+    with pytest.raises(
+        RuntimeError,
+        match="Payment reference is bound to different purchase details",
+    ):
+        insert_one_time_purchase(engine, duplicate_purchase)

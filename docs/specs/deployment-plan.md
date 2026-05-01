@@ -198,13 +198,10 @@ Required environment variables:
 - `CORS_ORIGINS`.
 - `FRONTEND_BASE_URL`.
 
-Current demo runtime:
+Current runtime:
 
-- The current code uses `DATABASE_PATH`, not `DATABASE_URL`.
-- A public testnet demo can run with `DATABASE_PATH=/tmp/purchases.db`, but that
-  is not durable and must not be described as production.
-- Production persistence requires the backend architecture hard-cutover to
-  Postgres and `DATABASE_URL`.
+- The backend requires Postgres through `DATABASE_URL`.
+- Migrations must run before service startup.
 
 Deploy gates:
 
@@ -271,9 +268,10 @@ Tasks:
 
 - Create a Render staging web service from the repo.
 - Configure Python 3.12 and `uv sync`.
+- Run `uv run alembic upgrade head`.
 - Start with `uv run uvicorn app.main:app --host 0.0.0.0 --port "$PORT"`.
 - Set testnet environment variables from `.env.example`.
-- Set `DATABASE_PATH=/tmp/purchases.db`.
+- Set `DATABASE_URL` to the staging Postgres connection string.
 - Set `MPP_REALM` to the Render or staging API domain.
 - Confirm `/health` returns ok.
 - Confirm `/articles` returns the demo articles.
@@ -295,7 +293,7 @@ Goal: make the backend deployable as a durable app.
 Tasks:
 
 - Add Postgres dependency and migration tool.
-- Replace production `DATABASE_PATH` with `DATABASE_URL`.
+- Require `DATABASE_URL`.
 - Add migrations for publishers, articles, purchases, subscriptions, usage
   events, and feedback.
 - Add `/health/live` and `/health/ready`.

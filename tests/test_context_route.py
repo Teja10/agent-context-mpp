@@ -1,12 +1,12 @@
-from app.db import Purchase, insert_purchase
-from app.models import ContextPackage
+import pytest
+
+from app.db import OneTimePurchase, insert_one_time_purchase
 from conftest import (
     ARTICLE_SLUG,
     CONTEXT_SLUG,
     CURRENCY,
     NETWORK,
     PAID_HEADERS,
-    RECEIPT_JSON,
     TX_HASH,
     RouteClient,
     purchase_count,
@@ -20,30 +20,29 @@ def test_unknown_slug_returns_404_before_charge(paid_client: RouteClient) -> Non
     assert paid_client.mpp.calls == []
 
 
-def test_duplicate_tx_hash_for_different_slug_returns_existing_context(
+def test_duplicate_payment_reference_for_different_slug_hard_fails(
     paid_client: RouteClient,
 ) -> None:
-    existing_article = paid_client.articles[ARTICLE_SLUG]
     requested_article = paid_client.articles[CONTEXT_SLUG]
-    insert_purchase(
-        paid_client.database_path,
-        Purchase(
-            article_slug=existing_article.slug,
-            payer_address="0xoriginal",
-            tx_hash=TX_HASH,
-            amount=existing_article.price,
+    insert_one_time_purchase(
+        paid_client.engine,
+        OneTimePurchase(
+            article_slug=ARTICLE_SLUG,
+            wallet_address="0xoriginal",
+            payment_reference=TX_HASH,
+            amount=paid_client.articles[ARTICLE_SLUG].price,
             currency=CURRENCY,
             network=NETWORK,
-            receipt_json=RECEIPT_JSON,
+            receipt={"status": "original"},
         ),
     )
 
-    response = paid_client.client.get(
-        f"/articles/{requested_article.slug}/context", headers=PAID_HEADERS
-    )
+    with pytest.raises(
+        RuntimeError,
+        match="Payment reference is bound to different purchase details",
+    ):
+        paid_client.client.get(
+            f"/articles/{requested_article.slug}/context", headers=PAID_HEADERS
+        )
 
-    assert response.status_code == 200
-    context = ContextPackage.model_validate(response.json())
-    assert context.summary == existing_article.summary
-    assert context.key_claims == existing_article.key_claims
-    assert purchase_count(paid_client.database_path) == 1
+    assert purchase_count(paid_client.engine) == 1

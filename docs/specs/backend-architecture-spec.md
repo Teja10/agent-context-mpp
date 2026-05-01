@@ -18,14 +18,15 @@ The current backend is a compact demo:
 - `app/articles.py` loads Markdown files from `articles/`.
 - `app/routes/articles.py` exposes public article metadata.
 - `app/routes/context.py` exposes paid structured context through MPP.
-- `app/db.py` stores purchases in SQLite.
+- `app/db.py` stores articles, wallet principals, purchases, subscriptions,
+  usage, and feedback in Postgres.
 - `app/config.py` validates Tempo environment safety.
 
 The production backend should keep the useful concepts but hard-cutover the
 runtime model:
 
 - Static Markdown directory becomes publisher-managed persisted articles.
-- SQLite becomes Postgres.
+- Postgres is required through `DATABASE_URL`.
 - Context-only paid access becomes full article plus context entitlement.
 - Single implicit publisher becomes explicit multi-publisher domain.
 - Basic listing becomes search, ranking, and usefulness signals.
@@ -503,9 +504,8 @@ Required backend environment variables:
 - `CORS_ORIGINS`.
 - `FRONTEND_BASE_URL`.
 
-The current demo uses `DATABASE_PATH`; production uses `DATABASE_URL`.
-Production code should hard-cutover to `DATABASE_URL` when Postgres persistence
-is implemented.
+The backend requires `DATABASE_URL` with the `postgresql+psycopg` SQLAlchemy
+scheme.
 
 Required deploy behavior:
 

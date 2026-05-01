@@ -1,9 +1,11 @@
-from pathlib import Path
+import os
 from typing import Literal
 
+from dotenv import dotenv_values
 from eth_utils.address import is_checksum_address
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 MAINNET_CHAIN_ID = 4217
 MODERATO_CHAIN_ID = 42431
@@ -12,6 +14,7 @@ MODERATO_RPC_URL = "https://rpc.moderato.tempo.xyz"
 MAINNET_EXPLORER_URL = "https://explore.tempo.xyz"
 MODERATO_EXPLORER_URL = "https://explore.tempo.xyz"
 TESTNET_PATHUSD_ADDRESS = "0x20c0000000000000000000000000000000000000"
+REMOVED_FILE_DATABASE_KEY = "DATABASE" + "_PATH"
 
 
 class MainnetSafetyError(RuntimeError):
@@ -21,7 +24,7 @@ class MainnetSafetyError(RuntimeError):
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="forbid")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     environment: str = Field(alias="ENVIRONMENT")
     tempo_network: Literal["mainnet", "moderato"] = Field(alias="TEMPO_NETWORK")
@@ -30,10 +33,12 @@ class Settings(BaseSettings):
     mpp_secret_key: str = Field(alias="MPP_SECRET_KEY")
     publisher_recipient: str = Field(alias="PUBLISHER_RECIPIENT")
     pathusd_address: str = Field(alias="PATHUSD_ADDRESS")
-    database_path: Path = Field(alias="DATABASE_PATH")
+    database_url: str = Field(alias="DATABASE_URL")
 
     def __init__(self) -> None:
+        self.reject_removed_database_path()
         super().__init__()
+        self.validate_database_url()
 
     @property
     def chain_id(self) -> int:
@@ -71,3 +76,19 @@ class Settings(BaseSettings):
             raise MainnetSafetyError("PUBLISHER_RECIPIENT must be EIP-55 checksummed")
         if self.pathusd_address.lower() == TESTNET_PATHUSD_ADDRESS:
             raise MainnetSafetyError("PATHUSD_ADDRESS must not use the testnet default")
+
+    def validate_database_url(self) -> None:
+        """Validate the required Postgres SQLAlchemy URL."""
+        url = make_url(self.database_url)
+        if url.drivername != "postgresql+psycopg":
+            raise ValueError("DATABASE_URL must use postgresql+psycopg")
+
+    def reject_removed_database_path(self) -> None:
+        """Reject removed file-backed database configuration."""
+        if (
+            REMOVED_FILE_DATABASE_KEY in os.environ
+            or REMOVED_FILE_DATABASE_KEY in dotenv_values(".env")
+        ):
+            raise ValueError(
+                f"{REMOVED_FILE_DATABASE_KEY} has been removed; use DATABASE_URL"
+            )

@@ -3,10 +3,13 @@ name = "agent-context-mpp"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.18.4",
     "eth-utils",
     "fastapi",
+    "psycopg[binary]>=3.3.3",
     "pydantic-settings",
     "pympp[tempo]",
+    "sqlalchemy>=2.0.49",
     "uvicorn>=0.46.0",
 ]
 

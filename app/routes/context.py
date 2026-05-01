@@ -1,37 +1,31 @@
 from hashlib import sha256
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from mpp import Challenge, Receipt
 from mpp.server.mpp import Mpp
-from pydantic import TypeAdapter
+from sqlalchemy.engine import Engine
 
-from app.articles import Article
-from app.db import Purchase, insert_purchase
+from app.db import OneTimePurchase, get_article_by_slug, insert_one_time_purchase
 from app.models import ContextPackage
 
 router = APIRouter()
-RECEIPT_PAYLOAD_ADAPTER = TypeAdapter(dict[str, str])
 
-_articles: dict[str, Article] | None = None
+_engine: Engine | None = None
 _mpp: Mpp | None = None
-_database_path: Path | None = None
 _currency: str | None = None
 _network: str | None = None
 
 
 def set_context(
-    articles: dict[str, Article],
+    engine: Engine,
     mpp: Mpp,
-    database_path: Path,
     currency: str,
     network: str,
 ) -> None:
     """Set context route resources loaded during application startup."""
-    global _articles, _mpp, _database_path, _currency, _network
-    _articles = articles
+    global _engine, _mpp, _currency, _network
+    _engine = engine
     _mpp = mpp
-    _database_path = database_path
     _currency = currency
     _network = network
 
@@ -41,16 +35,16 @@ async def get_article_context(
     slug: str, request: Request, response: Response
 ) -> ContextPackage | Response:
     """Return paid context for one loaded article."""
-    articles = _loaded_articles()
-    if slug not in articles:
+    engine = _loaded_engine()
+    article = get_article_by_slug(engine, slug)
+    if article is None:
         raise HTTPException(status_code=404, detail="Article not found")
 
     mpp = _loaded_mpp()
-    article = articles[slug]
     authorization = request.headers.get("Authorization")
     result = await mpp.charge(
         authorization,
-        article.price,
+        str(article.price),
         memo=_context_memo(article.slug),
     )
     if isinstance(result, Challenge):
@@ -62,47 +56,41 @@ async def get_article_context(
     credential, receipt = result
     response.headers["Payment-Receipt"] = receipt.to_payment_receipt()
     payer_address = _payer_address(credential.source)
-    purchase = insert_purchase(
-        _loaded_database_path(),
-        Purchase(
+    purchase = insert_one_time_purchase(
+        engine,
+        OneTimePurchase(
             article_slug=article.slug,
-            payer_address=payer_address,
-            tx_hash=receipt.reference,
+            wallet_address=payer_address,
+            payment_reference=receipt.reference,
             amount=article.price,
             currency=_loaded_currency(),
             network=_loaded_network(),
-            receipt_json=RECEIPT_PAYLOAD_ADAPTER.dump_json(
-                _receipt_payload(receipt)
-            ).decode(),
+            receipt=_receipt_payload(receipt),
         ),
     )
-    purchased_article = articles[purchase.article_slug]
+    purchased_article = get_article_by_slug(engine, purchase.article_slug)
+    if purchased_article is None:
+        raise RuntimeError("Purchased article was not found")
     return ContextPackage(
         summary=purchased_article.summary,
         key_claims=purchased_article.key_claims,
         allowed_excerpts=purchased_article.allowed_excerpts,
         suggested_citation=purchased_article.suggested_citation,
         license=purchased_article.license,
-        receipt=RECEIPT_PAYLOAD_ADAPTER.validate_json(purchase.receipt_json),
+        receipt=purchase.receipt,
     )
 
 
-def _loaded_articles() -> dict[str, Article]:
-    if _articles is None:
-        raise RuntimeError("Articles were not loaded during startup")
-    return _articles
+def _loaded_engine() -> Engine:
+    if _engine is None:
+        raise RuntimeError("Database engine was not loaded during startup")
+    return _engine
 
 
 def _loaded_mpp() -> Mpp:
     if _mpp is None:
         raise RuntimeError("MPP was not loaded during startup")
     return _mpp
-
-
-def _loaded_database_path() -> Path:
-    if _database_path is None:
-        raise RuntimeError("Database path was not loaded during startup")
-    return _database_path
 
 
 def _loaded_currency() -> str:
