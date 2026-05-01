@@ -5,7 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from mpp import Challenge, Receipt
 
 from app.auth import parse_wallet_address
-from app.db.queries import get_article_by_slug, insert_one_time_purchase
+from app.db.queries import (
+    get_article_by_slug,
+    get_publisher_by_id,
+    insert_one_time_purchase,
+)
 from app.db.records import OneTimePurchase
 from app.models import ContextPackage
 from app.state import AppState, get_state
@@ -24,6 +28,12 @@ async def get_article_context(
     article = get_article_by_slug(state.engine, slug)
     if article is None:
         raise HTTPException(status_code=404, detail="Article not found")
+
+    publisher = get_publisher_by_id(state.engine, article.publisher_id)
+    if publisher is None:
+        raise RuntimeError(f"Article {article.id} has no publisher")
+    if publisher.status == "disabled":
+        raise HTTPException(status_code=403, detail="Publisher is disabled")
 
     authorization = request.headers.get("Authorization")
     result = await state.mpp.charge(
