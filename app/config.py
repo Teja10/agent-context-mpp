@@ -1,16 +1,15 @@
-from pathlib import Path
 from typing import Literal
 
 from eth_utils.address import is_checksum_address
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 MAINNET_CHAIN_ID = 4217
 MODERATO_CHAIN_ID = 42431
 MAINNET_RPC_URL = "https://rpc.tempo.xyz"
 MODERATO_RPC_URL = "https://rpc.moderato.tempo.xyz"
-MAINNET_EXPLORER_URL = "https://explore.tempo.xyz"
-MODERATO_EXPLORER_URL = "https://explore.tempo.xyz"
+EXPLORER_URL = "https://explore.tempo.xyz"
 TESTNET_PATHUSD_ADDRESS = "0x20c0000000000000000000000000000000000000"
 
 
@@ -30,10 +29,19 @@ class Settings(BaseSettings):
     mpp_secret_key: str = Field(alias="MPP_SECRET_KEY")
     publisher_recipient: str = Field(alias="PUBLISHER_RECIPIENT")
     pathusd_address: str = Field(alias="PATHUSD_ADDRESS")
-    database_path: Path = Field(alias="DATABASE_PATH")
+    database_url: str = Field(alias="DATABASE_URL")
 
     def __init__(self) -> None:
+        """Load settings from environment variables and validate."""
         super().__init__()
+
+    @model_validator(mode="after")
+    def validate_database_url(self) -> "Settings":
+        """Validate the required Postgres SQLAlchemy URL."""
+        url = make_url(self.database_url)
+        if url.drivername != "postgresql+psycopg":
+            raise ValueError("DATABASE_URL must use postgresql+psycopg")
+        return self
 
     @property
     def chain_id(self) -> int:
@@ -52,9 +60,7 @@ class Settings(BaseSettings):
     @property
     def explorer_url(self) -> str:
         """Return the explorer URL for the configured network."""
-        if self.tempo_network == "mainnet":
-            return MAINNET_EXPLORER_URL
-        return MODERATO_EXPLORER_URL
+        return EXPLORER_URL
 
     def validate_mainnet_safety(self) -> None:
         """Validate explicit safeguards before allowing mainnet operation."""

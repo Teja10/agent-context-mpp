@@ -4,11 +4,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.articles import ARTICLES_DIR, load_articles
 from app.config import Settings
-from app.db import initialize_database
+from app.db.queries import create_database_engine, verify_database
 from app.mpp_setup import create_mpp
 from app.routes import articles, context, health
+from app.state import AppState
 
 
 @asynccontextmanager
@@ -16,17 +16,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Load startup resources before serving requests."""
     settings = Settings()
     settings.validate_mainnet_safety()
-    loaded_articles = load_articles(ARTICLES_DIR)
-    initialize_database(settings.database_path)
-    articles.set_articles(loaded_articles)
-    context.set_context(
-        loaded_articles,
-        create_mpp(settings),
-        settings.database_path,
-        settings.pathusd_address,
-        settings.tempo_network,
+    engine = create_database_engine(settings.database_url)
+    verify_database(engine)
+    app.state.ctx = AppState(
+        engine=engine,
+        mpp=create_mpp(settings),
+        pathusd_address=settings.pathusd_address,
+        tempo_network=settings.tempo_network,
     )
-    yield
+    try:
+        yield
+    finally:
+        engine.dispose()
 
 
 app = FastAPI(title="Thoth API", lifespan=lifespan)

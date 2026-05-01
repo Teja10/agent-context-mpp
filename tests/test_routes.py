@@ -1,6 +1,7 @@
 from pydantic import TypeAdapter
 
-from app.db import Purchase, lookup_purchase_by_tx_hash
+from app.db.queries import lookup_purchase_by_payment_reference
+from app.db.records import OneTimePurchase
 from app.models import ArticleMetadata, ContextPackage
 from mpp import Receipt
 from conftest import (
@@ -9,7 +10,6 @@ from conftest import (
     NETWORK,
     PAID_HEADERS,
     RECEIPT_PAYLOAD,
-    RECEIPT_JSON,
     TX_HASH,
     ChargeCall,
     RouteClient,
@@ -46,7 +46,7 @@ def test_article_detail_returns_metadata(challenge_client: RouteClient) -> None:
     assert response.status_code == 200
     article = ArticleMetadata.model_validate(response.json())
     assert article.slug == ARTICLE_SLUG
-    assert article.price == challenge_client.articles[ARTICLE_SLUG].price
+    assert article.price == str(challenge_client.articles[ARTICLE_SLUG].price)
 
 
 def test_unknown_article_detail_returns_404(challenge_client: RouteClient) -> None:
@@ -65,7 +65,7 @@ def test_context_without_authorization_returns_payment_challenge(
     assert challenge_client.mpp.calls == [
         ChargeCall(
             authorization=None,
-            amount=challenge_client.articles[ARTICLE_SLUG].price,
+            amount=str(challenge_client.articles[ARTICLE_SLUG].price),
             memo="0x4709280c7c375e35bb5c1dc5beba9fd25ddc8743c6959facf650ef0c6e3ab785",
         )
     ]
@@ -99,14 +99,16 @@ def test_paid_context_persists_purchase(paid_client: RouteClient) -> None:
     )
 
     assert response.status_code == 200
-    assert lookup_purchase_by_tx_hash(paid_client.database_path, TX_HASH) == Purchase(
+    assert lookup_purchase_by_payment_reference(
+        paid_client.engine, TX_HASH
+    ) == OneTimePurchase(
         article_slug=article.slug,
-        payer_address="0xpayer",
-        tx_hash=TX_HASH,
+        wallet_address="0xpayer",
+        payment_reference=TX_HASH,
         amount=article.price,
         currency=CURRENCY,
         network=NETWORK,
-        receipt_json=RECEIPT_JSON,
+        receipt=RECEIPT_PAYLOAD,
     )
 
 
@@ -125,4 +127,4 @@ def test_same_tx_hash_replay_returns_existing_purchase_without_second_row(
     assert ContextPackage.model_validate(first_response.json()) == (
         ContextPackage.model_validate(second_response.json())
     )
-    assert purchase_count(paid_client.database_path) == 1
+    assert purchase_count(paid_client.engine) == 1
