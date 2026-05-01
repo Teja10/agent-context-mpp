@@ -1,6 +1,6 @@
 # agent-context-mpp
 
-ContextPass is a FastAPI demo for paid machine-readable article context. It
+Thoth is a FastAPI demo for paid machine-readable article context. It
 serves public article metadata for humans and agents, then protects the
 structured context package behind an MPP payment challenge.
 
