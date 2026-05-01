@@ -1,9 +1,7 @@
-import os
 from typing import Literal
 
-from dotenv import dotenv_values
 from eth_utils.address import is_checksum_address
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
@@ -13,7 +11,6 @@ MAINNET_RPC_URL = "https://rpc.tempo.xyz"
 MODERATO_RPC_URL = "https://rpc.moderato.tempo.xyz"
 EXPLORER_URL = "https://explore.tempo.xyz"
 TESTNET_PATHUSD_ADDRESS = "0x20c0000000000000000000000000000000000000"
-REMOVED_FILE_DATABASE_KEY = "DATABASE_PATH"
 
 
 class MainnetSafetyError(RuntimeError):
@@ -35,9 +32,16 @@ class Settings(BaseSettings):
     database_url: str = Field(alias="DATABASE_URL")
 
     def __init__(self) -> None:
-        self.reject_removed_database_path()
+        """Load settings from environment variables and validate."""
         super().__init__()
-        self.validate_database_url()
+
+    @model_validator(mode="after")
+    def validate_database_url(self) -> "Settings":
+        """Validate the required Postgres SQLAlchemy URL."""
+        url = make_url(self.database_url)
+        if url.drivername != "postgresql+psycopg":
+            raise ValueError("DATABASE_URL must use postgresql+psycopg")
+        return self
 
     @property
     def chain_id(self) -> int:
@@ -73,19 +77,3 @@ class Settings(BaseSettings):
             raise MainnetSafetyError("PUBLISHER_RECIPIENT must be EIP-55 checksummed")
         if self.pathusd_address.lower() == TESTNET_PATHUSD_ADDRESS:
             raise MainnetSafetyError("PATHUSD_ADDRESS must not use the testnet default")
-
-    def validate_database_url(self) -> None:
-        """Validate the required Postgres SQLAlchemy URL."""
-        url = make_url(self.database_url)
-        if url.drivername != "postgresql+psycopg":
-            raise ValueError("DATABASE_URL must use postgresql+psycopg")
-
-    def reject_removed_database_path(self) -> None:
-        """Reject removed file-backed database configuration."""
-        if (
-            REMOVED_FILE_DATABASE_KEY in os.environ
-            or REMOVED_FILE_DATABASE_KEY in dotenv_values(".env")
-        ):
-            raise ValueError(
-                f"{REMOVED_FILE_DATABASE_KEY} has been removed; use DATABASE_URL"
-            )

@@ -3,12 +3,12 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.engine import Engine
 
-from app.db import (
-    OneTimePurchase,
+from app.db.queries import (
     insert_one_time_purchase,
     list_articles,
     lookup_purchase_by_payment_reference,
 )
+from app.db.records import OneTimePurchase
 from conftest import (
     ARTICLE_ID,
     ARTICLE_SLUG,

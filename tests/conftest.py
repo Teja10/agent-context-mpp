@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
 import os
-from typing import cast
+from typing import Optional, cast
 from uuid import UUID
 
 import pytest
@@ -14,13 +14,9 @@ from mpp.server.mpp import Mpp
 from sqlalchemy import insert, text
 from sqlalchemy.engine import Engine
 
-from app.db import (
-    ArticleRecord,
-    articles,
-    create_database_engine,
-    list_articles,
-    publishers,
-)
+from app.db.queries import create_database_engine, list_articles
+from app.db.records import ArticleRecord
+from app.db.schema import articles, publishers
 from app.routes import articles as article_routes
 from app.routes import context, health
 from app.state import AppState
@@ -47,7 +43,7 @@ IDENTITY_ID = UUID("44444444-4444-4444-4444-444444444444")
 class ChargeCall:
     """MPP charge invocation captured by tests."""
 
-    authorization: str | None
+    authorization: Optional[str]
     amount: str
     memo: str
 
@@ -74,7 +70,7 @@ class FakeMpp:
         self.calls: list[ChargeCall] = []
 
     async def charge(
-        self, authorization: str | None, amount: str, *, memo: str
+        self, authorization: Optional[str], amount: str, *, memo: str
     ) -> Challenge | SuccessfulCharge:
         """Record a charge request and return the configured result."""
         self.calls.append(

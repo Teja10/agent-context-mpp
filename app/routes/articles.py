@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.db import get_article_by_slug, list_article_metadata
+from app.db.queries import get_article_by_slug, list_article_metadata
 from app.models import ArticleMetadata
 from app.state import AppState, get_state
 

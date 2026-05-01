@@ -195,19 +195,6 @@ def test_settings_rejects_non_postgres_database_url(
         )
 
 
-def test_settings_rejects_removed_database_path(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    tmp_path.joinpath(".env").write_text("DATABASE_PATH=purchases.db\n")
-
-    with pytest.raises(
-        ValueError,
-        match="DATABASE_PATH has been removed; use DATABASE_URL",
-    ):
-        load_settings(monkeypatch, tmp_path, valid_mainnet_environment())
-
-
 def test_settings_rejects_unknown_dotenv_key(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

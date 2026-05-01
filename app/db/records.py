@@ -40,7 +40,10 @@ class ArticleRecord:
 
 @dataclass(frozen=True)
 class OneTimePurchase:
-    """One-time article purchase stored by payment reference."""
+    """One-time article purchase stored by payment reference.
+
+    Frozen: returned from lookups and compared for equality in idempotency checks.
+    """
 
     article_slug: str
     wallet_address: str

@@ -1,5 +1,6 @@
 """Database query and engine functions."""
 
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import create_engine, select, text
@@ -66,7 +67,7 @@ def list_articles(engine: Engine) -> list[ArticleRecord]:
         return [_article_record(row) for row in rows.mappings()]
 
 
-def get_article_by_slug(engine: Engine, slug: str) -> ArticleRecord | None:
+def get_article_by_slug(engine: Engine, slug: str) -> Optional[ArticleRecord]:
     """Return one article by its slug."""
     with engine.connect() as connection:
         row = (
@@ -123,7 +124,7 @@ def insert_one_time_purchase(
 def lookup_purchase_by_payment_reference(
     engine: Engine,
     payment_reference: str,
-) -> OneTimePurchase | None:
+) -> Optional[OneTimePurchase]:
     """Return the purchase stored for a payment reference."""
     with engine.connect() as connection:
         row = (

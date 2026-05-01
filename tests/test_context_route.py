@@ -1,6 +1,7 @@
 import pytest
 
-from app.db import OneTimePurchase, insert_one_time_purchase
+from app.db.queries import insert_one_time_purchase
+from app.db.records import OneTimePurchase
 from conftest import (
     ARTICLE_ID,
     ARTICLE_SLUG,

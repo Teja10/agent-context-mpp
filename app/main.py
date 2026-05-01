@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings
-from app.db import create_database_engine, verify_database
+from app.db.queries import create_database_engine, verify_database
 from app.mpp_setup import create_mpp
 from app.routes import articles, context, health
 from app.state import AppState

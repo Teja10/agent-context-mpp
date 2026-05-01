@@ -1,10 +1,11 @@
 from hashlib import sha256
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from mpp import Challenge, Receipt
 
-from app.db import OneTimePurchase, get_article_by_slug, insert_one_time_purchase
+from app.db.queries import get_article_by_slug, insert_one_time_purchase
+from app.db.records import OneTimePurchase
 from app.models import ContextPackage
 from app.state import AppState, get_state
 
@@ -61,7 +62,7 @@ async def get_article_context(
     )
 
 
-def _payer_address(source: str | None) -> str:
+def _payer_address(source: Optional[str]) -> str:
     if source is None or source == "":
         raise ValueError("Credential source is required")
     address = source.rsplit(":", maxsplit=1)[-1]
