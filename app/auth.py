@@ -5,6 +5,7 @@ from typing import Annotated
 
 from eth_account import Account
 from eth_account.messages import encode_defunct
+from eth_utils.exceptions import ValidationError
 from fastapi import Depends, HTTPException, Request
 from mpp import Challenge
 
@@ -104,7 +105,7 @@ def require_wallet_principal(
         wallet_address = _verify_wallet_proof(
             nonce, signature, state.mpp.realm, state.mpp.secret_key
         )
-    except Exception:
+    except (ValueError, ValidationError):
         raise HTTPException(status_code=401, detail="Invalid wallet proof")
     upsert_wallet_principal(state.engine, wallet_address)
     return WalletPrincipal(wallet_address=wallet_address)

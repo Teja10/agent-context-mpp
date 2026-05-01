@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from uuid import UUID
 
 from eth_account import Account
@@ -168,7 +169,7 @@ def _insert_publisher_for_account(engine: Engine, account: LocalAccount) -> None
                 handle="test-handle",
                 display_name="Test Publisher",
                 recipient_address=account.address,
-                created_at="now()",
+                created_at=datetime.now(UTC),
             )
             .on_conflict_do_nothing(index_elements=[publishers.c.handle])
         )
