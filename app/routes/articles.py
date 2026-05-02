@@ -254,6 +254,12 @@ def publish_article_route(
         missing.append("price")
     if not article.license:
         missing.append("license")
+    if not article.key_claims:
+        missing.append("key_claims")
+    if not article.allowed_excerpts:
+        missing.append("allowed_excerpts")
+    if not article.suggested_citation:
+        missing.append("suggested_citation")
     if missing:
         raise HTTPException(
             status_code=422, detail=f"Missing required fields: {', '.join(missing)}"
