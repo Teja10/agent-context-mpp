@@ -43,6 +43,7 @@ class ArticleRecord:
     suggested_citation: Optional[str]
     slug: str
     body: str
+    publisher_recipient_address: str
 
     @property
     def metadata(self) -> ArticleMetadata:
@@ -72,4 +73,5 @@ class OneTimePurchase:
     amount: Decimal
     currency: str
     network: str
+    recipient_wallet: str
     receipt: dict[str, str]

@@ -1,7 +1,7 @@
 """Add article draft/published status and make metadata columns nullable.
 
-Revision ID: 0003_age13_article_draft_status
-Revises: 0002_age12_publisher_profile
+Revision ID: 0004_age13_article_draft_status
+Revises: 0003_age15_purchase_recipient
 Create Date: 2026-05-01
 """
 
@@ -11,8 +11,8 @@ from typing import Optional, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0003_age13_article_draft_status"
-down_revision: str = "0002_age12_publisher_profile"
+revision: str = "0004_age13_article_draft_status"
+down_revision: str = "0003_age15_purchase_recipient"
 branch_labels: Optional[Union[str, Sequence[str]]] = None
 depends_on: Optional[Union[str, Sequence[str]]] = None
 

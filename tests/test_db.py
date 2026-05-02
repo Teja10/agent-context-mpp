@@ -13,6 +13,7 @@ from conftest import (
     ARTICLE_ID,
     ARTICLE_SLUG,
     CONTEXT_ID,
+    PUBLISHER_RECIPIENT,
     RECEIPT_PAYLOAD,
     TX_HASH,
     purchase_count,
@@ -28,6 +29,7 @@ def purchase() -> OneTimePurchase:
         amount=Decimal("1.25"),
         currency="PATHUSD",
         network="tempo",
+        recipient_wallet=PUBLISHER_RECIPIENT.lower(),
         receipt=RECEIPT_PAYLOAD,
     )
 
@@ -39,6 +41,7 @@ def test_list_articles_returns_seeded_postgres_articles(engine: Engine) -> None:
         "ai-agent-payments",
         "context-for-machines",
         "decentralized-identity",
+        "publisher-b-article",
     ]
     assert articles[0].key_claims == ["AI Agent Payments claim."]
 
@@ -78,6 +81,7 @@ def test_duplicate_payment_reference_for_different_article_hard_fails(
         amount=Decimal("9.99"),
         currency="PATHUSD",
         network="tempo",
+        recipient_wallet=PUBLISHER_RECIPIENT.lower(),
         receipt={"status": "duplicate"},
     )
 

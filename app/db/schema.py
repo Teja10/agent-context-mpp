@@ -102,8 +102,12 @@ one_time_purchases = Table(
     Column("amount", Numeric(), nullable=False),
     Column("currency", TEXT, nullable=False),
     Column("network", TEXT, nullable=False),
+    Column("recipient_wallet", TEXT, nullable=False),
     Column("receipt", JSONB, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint(
+        "recipient_wallet <> ''", name="one_time_purchases_recipient_nonempty"
+    ),
     UniqueConstraint(
         "payment_reference", name="one_time_purchases_payment_reference_key"
     ),
