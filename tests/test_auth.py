@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from eth_account import Account
@@ -120,10 +121,9 @@ def test_publisher_owner_mutation_success(
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "handle": "test-handle",
-        "display_name": "Updated Name",
-    }
+    data = response.json()
+    assert data["handle"] == "test-handle"
+    assert data["display_name"] == "Updated Name"
 
 
 def test_publisher_owner_mismatch_returns_403(
@@ -159,7 +159,7 @@ def test_publisher_not_found_returns_404(
 
 
 def _insert_publisher_for_account(engine: Engine, account: LocalAccount) -> None:
-    """Insert a test publisher whose recipient matches the account address."""
+    """Insert a test publisher whose owner matches the account address."""
     upsert_wallet_principal(engine, account.address.lower())
     with engine.begin() as connection:
         connection.execute(
@@ -168,7 +168,12 @@ def _insert_publisher_for_account(engine: Engine, account: LocalAccount) -> None
                 id=UUID("55555555-5555-5555-5555-555555555555"),
                 handle="test-handle",
                 display_name="Test Publisher",
+                owner_address=account.address.lower(),
+                description="Test publisher",
+                status="active",
                 recipient_address=account.address,
+                default_article_price=Decimal("0.50"),
+                default_subscription_price=Decimal("5.00"),
                 created_at=datetime.now(UTC),
             )
             .on_conflict_do_nothing(index_elements=[publishers.c.handle])

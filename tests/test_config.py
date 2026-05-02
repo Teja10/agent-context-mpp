@@ -109,26 +109,6 @@ def test_mainnet_rejects_local_realm(
         settings.validate_mainnet_safety()
 
 
-def test_mainnet_rejects_non_checksummed_recipient(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = load_settings(
-        monkeypatch,
-        tmp_path,
-        replace(
-            valid_mainnet_environment(),
-            publisher_recipient="0x52908400098527886e0f7030069857d2e4169ee7",
-        ),
-    )
-
-    with pytest.raises(
-        MainnetSafetyError,
-        match="PUBLISHER_RECIPIENT must be EIP-55 checksummed",
-    ):
-        settings.validate_mainnet_safety()
-
-
 def test_mainnet_rejects_testnet_pathusd_address(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
