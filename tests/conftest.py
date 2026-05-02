@@ -306,6 +306,7 @@ def _article_values(
         "publisher_id": PUBLISHER_ID,
         "slug": slug,
         "title": title,
+        "status": "published",
         "author": "Agent Context Research",
         "published_at": date(2026, 4, 29),
         "price": price,

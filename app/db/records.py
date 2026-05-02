@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from typing import Optional
 from uuid import UUID
 
 from app.models import ArticleMetadata
@@ -30,21 +31,25 @@ class ArticleRecord:
     id: UUID
     publisher_id: UUID
     title: str
-    author: str
-    published_date: date
-    price: Decimal
-    license: str
-    summary: str
-    tags: list[str]
-    key_claims: list[str]
-    allowed_excerpts: list[str]
-    suggested_citation: str
+    status: str
+    author: Optional[str]
+    published_date: Optional[date]
+    price: Optional[Decimal]
+    license: Optional[str]
+    summary: Optional[str]
+    tags: Optional[list[str]]
+    key_claims: Optional[list[str]]
+    allowed_excerpts: Optional[list[str]]
+    suggested_citation: Optional[str]
     slug: str
     body: str
 
     @property
     def metadata(self) -> ArticleMetadata:
         """Return public metadata for this article."""
+        assert self.author is not None
+        assert self.published_date is not None
+        assert self.price is not None
         return ArticleMetadata(
             title=self.title,
             author=self.author,

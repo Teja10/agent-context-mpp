@@ -26,13 +26,15 @@ def test_duplicate_payment_reference_for_different_slug_hard_fails(
     paid_client: RouteClient,
 ) -> None:
     requested_article = paid_client.articles[CONTEXT_SLUG]
+    article_price = paid_client.articles[ARTICLE_SLUG].price
+    assert article_price is not None
     insert_one_time_purchase(
         paid_client.engine,
         OneTimePurchase(
             article_slug=ARTICLE_SLUG,
             wallet_address="0xoriginal",
             payment_reference=TX_HASH,
-            amount=paid_client.articles[ARTICLE_SLUG].price,
+            amount=article_price,
             currency=CURRENCY,
             network=NETWORK,
             receipt={"status": "original"},

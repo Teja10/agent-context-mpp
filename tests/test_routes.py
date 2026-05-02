@@ -93,6 +93,7 @@ def test_paid_context_returns_context_package(paid_client: RouteClient) -> None:
 
 def test_paid_context_persists_purchase(paid_client: RouteClient) -> None:
     article = paid_client.articles[ARTICLE_SLUG]
+    assert article.price is not None
 
     response = paid_client.client.get(
         f"/articles/{ARTICLE_SLUG}/context", headers=PAID_HEADERS
