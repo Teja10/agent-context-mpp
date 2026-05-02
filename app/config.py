@@ -26,7 +26,6 @@ class Settings(BaseSettings):
     mainnet_confirmation: bool = Field(alias="MAINNET_CONFIRMATION")
     mpp_realm: str = Field(alias="MPP_REALM")
     mpp_secret_key: str = Field(alias="MPP_SECRET_KEY")
-    publisher_recipient: str = Field(alias="PUBLISHER_RECIPIENT")
     pathusd_address: str = Field(alias="PATHUSD_ADDRESS")
     database_url: str = Field(alias="DATABASE_URL")
 

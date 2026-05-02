@@ -90,9 +90,7 @@ def downgrade() -> None:
     op.drop_constraint(
         "publishers_subscription_price_positive", "publishers", type_="check"
     )
-    op.drop_constraint(
-        "publishers_article_price_positive", "publishers", type_="check"
-    )
+    op.drop_constraint("publishers_article_price_positive", "publishers", type_="check")
     op.drop_constraint("publishers_status_valid", "publishers", type_="check")
     op.drop_constraint("publishers_recipient_key", "publishers", type_="unique")
     op.drop_column("publishers", "default_subscription_price")

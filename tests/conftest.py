@@ -38,9 +38,14 @@ RECEIPT_PAYLOAD = {
     "method": "tempo",
 }
 PUBLISHER_ID = UUID("11111111-1111-1111-1111-111111111111")
+PUBLISHER_RECIPIENT = "0x52908400098527886E0F7030069857D2E4169EE7"
 ARTICLE_ID = UUID("22222222-2222-2222-2222-222222222222")
 CONTEXT_ID = UUID("33333333-3333-3333-3333-333333333333")
 IDENTITY_ID = UUID("44444444-4444-4444-4444-444444444444")
+PUBLISHER_B_ID = UUID("77777777-7777-7777-7777-777777777777")
+PUBLISHER_B_RECIPIENT = "0xDE709f2102306220921060314715629080e2fB77"
+ARTICLE_B_ID = UUID("88888888-8888-8888-8888-888888888888")
+ARTICLE_B_SLUG = "publisher-b-article"
 
 
 @dataclass(frozen=True)
@@ -50,6 +55,7 @@ class ChargeCall:
     authorization: Optional[str]
     amount: str
     memo: str
+    recipient: Optional[str]
 
 
 @dataclass(frozen=True)
@@ -78,11 +84,21 @@ class FakeMpp:
         self.calls: list[ChargeCall] = []
 
     async def charge(
-        self, authorization: Optional[str], amount: str, *, memo: str
+        self,
+        authorization: Optional[str],
+        amount: str,
+        *,
+        memo: str,
+        recipient: Optional[str],
     ) -> Challenge | SuccessfulCharge:
         """Record a charge request and return the configured result."""
         self.calls.append(
-            ChargeCall(authorization=authorization, amount=amount, memo=memo)
+            ChargeCall(
+                authorization=authorization,
+                amount=amount,
+                memo=memo,
+                recipient=recipient,
+            )
         )
         return self.result
 
@@ -260,9 +276,23 @@ def _insert_article_catalog(engine: Engine) -> None:
                 owner_address=OWNER_ADDRESS,
                 description="Research publisher",
                 status="active",
-                recipient_address="0x52908400098527886E0F7030069857D2E4169EE7",
+                recipient_address=PUBLISHER_RECIPIENT,
                 default_article_price=Decimal("0.25"),
                 default_subscription_price=Decimal("5.00"),
+                created_at=created_at,
+            )
+        )
+        connection.execute(
+            insert(publishers_table).values(
+                id=PUBLISHER_B_ID,
+                handle="publisher-b",
+                display_name="Publisher B",
+                owner_address=OWNER_ADDRESS,
+                description="Publisher B",
+                status="active",
+                recipient_address=PUBLISHER_B_RECIPIENT,
+                default_article_price=Decimal("0.50"),
+                default_subscription_price=Decimal("10.00"),
                 created_at=created_at,
             )
         )
@@ -275,6 +305,7 @@ def _insert_article_catalog(engine: Engine) -> None:
                     "AI Agent Payments",
                     Decimal("0.25"),
                     created_at,
+                    PUBLISHER_ID,
                 ),
                 _article_values(
                     CONTEXT_ID,
@@ -282,6 +313,7 @@ def _insert_article_catalog(engine: Engine) -> None:
                     "Context for Machines",
                     Decimal("1.25"),
                     created_at,
+                    PUBLISHER_ID,
                 ),
                 _article_values(
                     IDENTITY_ID,
@@ -289,6 +321,15 @@ def _insert_article_catalog(engine: Engine) -> None:
                     "Decentralized Identity",
                     Decimal("0.75"),
                     created_at,
+                    PUBLISHER_ID,
+                ),
+                _article_values(
+                    ARTICLE_B_ID,
+                    ARTICLE_B_SLUG,
+                    "Publisher B Article",
+                    Decimal("0.50"),
+                    created_at,
+                    PUBLISHER_B_ID,
                 ),
             ],
         )
@@ -300,10 +341,11 @@ def _article_values(
     title: str,
     price: Decimal,
     created_at: datetime,
+    publisher_id: UUID,
 ) -> dict[str, object]:
     return {
         "id": article_id,
-        "publisher_id": PUBLISHER_ID,
+        "publisher_id": publisher_id,
         "slug": slug,
         "title": title,
         "author": "Agent Context Research",

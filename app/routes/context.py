@@ -40,6 +40,7 @@ async def get_article_context(
         authorization,
         str(article.price),
         memo=_context_memo(article.slug),
+        recipient=article.publisher_recipient_address,
     )
     if isinstance(result, Challenge):
         return Response(
@@ -61,6 +62,7 @@ async def get_article_context(
             amount=article.price,
             currency=state.pathusd_address,
             network=state.tempo_network,
+            recipient_wallet=article.publisher_recipient_address.lower(),
             receipt=_receipt_payload(receipt),
         ),
         article.id,

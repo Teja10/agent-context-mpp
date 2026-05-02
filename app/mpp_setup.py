@@ -17,7 +17,6 @@ def create_mpp(settings: Settings) -> Mpp:
             chain_id=settings.chain_id,
             rpc_url=settings.rpc_url,
             currency=settings.pathusd_address,
-            recipient=settings.publisher_recipient,
         ),
         realm=settings.mpp_realm,
         secret_key=settings.mpp_secret_key,

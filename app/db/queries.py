@@ -68,17 +68,37 @@ def list_article_metadata(engine: Engine) -> list[ArticleMetadata]:
 
 
 def list_articles(engine: Engine) -> list[ArticleRecord]:
-    """Return all articles ordered by slug."""
+    """Return all articles ordered by slug, joined with their publishers."""
     with engine.connect() as connection:
-        rows = connection.execute(select(articles).order_by(articles.c.slug))
+        rows = connection.execute(
+            select(
+                articles,
+                publishers.c.recipient_address.label("publisher_recipient_address"),
+            )
+            .select_from(
+                articles.join(publishers, articles.c.publisher_id == publishers.c.id)
+            )
+            .order_by(articles.c.slug)
+        )
         return [_article_record(row) for row in rows.mappings()]
 
 
 def get_article_by_slug(engine: Engine, slug: str) -> Optional[ArticleRecord]:
-    """Return one article by its slug."""
+    """Return one article by its slug, joined with its publisher."""
     with engine.connect() as connection:
         row = (
-            connection.execute(select(articles).where(articles.c.slug == slug))
+            connection.execute(
+                select(
+                    articles,
+                    publishers.c.recipient_address.label("publisher_recipient_address"),
+                )
+                .select_from(
+                    articles.join(
+                        publishers, articles.c.publisher_id == publishers.c.id
+                    )
+                )
+                .where(articles.c.slug == slug)
+            )
             .mappings()
             .one_or_none()
         )
@@ -120,12 +140,11 @@ def insert_one_time_purchase(
                 amount=purchase.amount,
                 currency=purchase.currency,
                 network=purchase.network,
+                recipient_wallet=purchase.recipient_wallet,
                 receipt=purchase.receipt,
                 created_at=text("now()"),
             )
-            .on_conflict_do_nothing(
-                index_elements=[one_time_purchases.c.payment_reference]
-            )
+            .on_conflict_do_nothing()
         )
     if result.rowcount == 1:
         return purchase
@@ -133,7 +152,7 @@ def insert_one_time_purchase(
         engine, purchase.payment_reference
     )
     if existing_purchase is None:
-        raise RuntimeError("Purchase conflict did not return an existing row")
+        raise RuntimeError("Wallet already purchased this article")
     if existing_purchase != purchase:
         raise RuntimeError("Payment reference is bound to different purchase details")
     return existing_purchase
@@ -154,6 +173,7 @@ def lookup_purchase_by_payment_reference(
                     one_time_purchases.c.amount,
                     one_time_purchases.c.currency,
                     one_time_purchases.c.network,
+                    one_time_purchases.c.recipient_wallet,
                     one_time_purchases.c.receipt,
                 )
                 .select_from(
@@ -188,6 +208,7 @@ def _article_record(row: RowMapping) -> ArticleRecord:
         suggested_citation=row["suggested_citation"],
         slug=row["slug"],
         body=row["body"],
+        publisher_recipient_address=row["publisher_recipient_address"],
     )
 
 
@@ -333,5 +354,6 @@ def _one_time_purchase(row: RowMapping) -> OneTimePurchase:
         amount=row["amount"],
         currency=row["currency"],
         network=row["network"],
+        recipient_wallet=row["recipient_wallet"],
         receipt=dict(row["receipt"]),
     )
