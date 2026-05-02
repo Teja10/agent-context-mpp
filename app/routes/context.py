@@ -35,6 +35,13 @@ async def get_article_context(
     if publisher.status == "disabled":
         raise HTTPException(status_code=403, detail="Publisher is disabled")
 
+    assert article.price is not None
+    assert article.summary is not None
+    assert article.key_claims is not None
+    assert article.allowed_excerpts is not None
+    assert article.suggested_citation is not None
+    assert article.license is not None
+
     authorization = request.headers.get("Authorization")
     result = await state.mpp.charge(
         authorization,
