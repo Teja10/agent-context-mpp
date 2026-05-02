@@ -14,7 +14,11 @@ from mpp.server.mpp import Mpp
 from sqlalchemy import insert, text
 from sqlalchemy.engine import Engine
 
-from app.db.queries import create_database_engine, list_articles
+from app.db.queries import (
+    create_database_engine,
+    list_articles,
+    upsert_wallet_principal,
+)
 from app.db.records import ArticleRecord
 from app.db.schema import articles, publishers as publishers_table
 from app.routes import articles as article_routes
@@ -257,15 +261,24 @@ def _truncate_age10_tables(engine: Engine) -> None:
         )
 
 
+OWNER_ADDRESS = "0x52908400098527886e0f7030069857d2e4169ee7"
+
+
 def _insert_article_catalog(engine: Engine) -> None:
     created_at = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
+    upsert_wallet_principal(engine, OWNER_ADDRESS)
     with engine.begin() as connection:
         connection.execute(
             insert(publishers_table).values(
                 id=PUBLISHER_ID,
                 handle="agent-context-research",
                 display_name="Agent Context Research",
+                owner_address=OWNER_ADDRESS,
+                description="Research publisher",
+                status="active",
                 recipient_address=PUBLISHER_RECIPIENT,
+                default_article_price=Decimal("0.25"),
+                default_subscription_price=Decimal("5.00"),
                 created_at=created_at,
             )
         )
@@ -274,7 +287,12 @@ def _insert_article_catalog(engine: Engine) -> None:
                 id=PUBLISHER_B_ID,
                 handle="publisher-b",
                 display_name="Publisher B",
+                owner_address=OWNER_ADDRESS,
+                description="Publisher B",
+                status="active",
                 recipient_address=PUBLISHER_B_RECIPIENT,
+                default_article_price=Decimal("0.50"),
+                default_subscription_price=Decimal("10.00"),
                 created_at=created_at,
             )
         )

@@ -15,7 +15,12 @@ class PublisherRecord:
     id: UUID
     handle: str
     display_name: str
+    owner_address: str
+    description: str
+    status: str
     recipient_address: str
+    default_article_price: Decimal
+    default_subscription_price: Decimal
 
 
 @dataclass(frozen=True)
@@ -23,6 +28,7 @@ class ArticleRecord:
     """Article content loaded from Postgres."""
 
     id: UUID
+    publisher_id: UUID
     title: str
     author: str
     published_date: date

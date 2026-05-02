@@ -30,10 +30,29 @@ publishers = Table(
     Column("id", PG_UUID(as_uuid=True), primary_key=True),
     Column("handle", TEXT, nullable=False),
     Column("display_name", TEXT, nullable=False),
+    Column(
+        "owner_address",
+        TEXT,
+        ForeignKey("wallet_principals.wallet_address"),
+        nullable=False,
+    ),
+    Column("description", TEXT, nullable=False),
+    Column("status", TEXT, nullable=False),
     Column("recipient_address", TEXT, nullable=False),
+    Column("default_article_price", Numeric(), nullable=False),
+    Column("default_subscription_price", Numeric(), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     UniqueConstraint("handle", name="publishers_handle_key"),
+    UniqueConstraint("recipient_address", name="publishers_recipient_key"),
     CheckConstraint("handle <> ''", name="publishers_handle_nonempty"),
+    CheckConstraint("status IN ('active', 'disabled')", name="publishers_status_valid"),
+    CheckConstraint(
+        "default_article_price > 0", name="publishers_article_price_positive"
+    ),
+    CheckConstraint(
+        "default_subscription_price > 0",
+        name="publishers_subscription_price_positive",
+    ),
 )
 articles = Table(
     "articles",

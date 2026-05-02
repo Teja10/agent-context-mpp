@@ -1,7 +1,7 @@
 """Add recipient_wallet to one_time_purchases.
 
-Revision ID: 0002_age15_purchase_recipient
-Revises: 0001_age10_postgres_persistence
+Revision ID: 0003_age15_purchase_recipient
+Revises: 0002_age12_publisher_profile
 Create Date: 2026-05-01
 """
 
@@ -12,8 +12,8 @@ from typing import Optional, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0002_age15_purchase_recipient"
-down_revision: Optional[str] = "0001_age10_postgres_persistence"
+revision: str = "0003_age15_purchase_recipient"
+down_revision: str = "0002_age12_publisher_profile"
 branch_labels: Optional[Union[str, Sequence[str]]] = None
 depends_on: Optional[Union[str, Sequence[str]]] = None
 
