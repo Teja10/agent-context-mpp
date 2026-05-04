@@ -3,7 +3,7 @@
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from cryptography.fernet import Fernet
 from eth_account import Account
@@ -12,17 +12,22 @@ from sqlalchemy.engine import Engine
 
 from app.db.queries import (
     insert_authorization_with_key,
+    insert_one_time_purchase,
     insert_subscription_period,
     upsert_wallet_principal,
 )
-from app.db.records import SubscriptionPeriod
+from app.db.records import OneTimePurchase, SubscriptionPeriod
 from app.keystore import Keystore
 from app.models import ContextPackage
 from conftest import (
+    ARTICLE_B_SLUG,
+    ARTICLE_ID,
     ARTICLE_SLUG,
     CURRENCY,
     NETWORK,
+    PUBLISHER_B_ID,
     PUBLISHER_ID,
+    PUBLISHER_RECIPIENT,
     RouteClient,
     create_challenge_nonce,
     wallet_proof_header,
@@ -112,8 +117,6 @@ def test_active_subscription_for_other_publisher_does_not_unlock(
     challenge_client: RouteClient,
 ) -> None:
     """Subscription to publisher A must not unlock publisher B's article."""
-    from conftest import ARTICLE_B_SLUG, PUBLISHER_B_ID
-
     account = Account.create()
     wallet_address = account.address.lower()
     # Seed a sub for publisher A then ask for publisher B's article.
@@ -143,3 +146,83 @@ def test_payment_auth_path_still_works_for_unsubscribed_wallet(
     payload = ContextPackage.model_validate(response.json())
     # The receipt comes from the PPV (MPP) path, not a subscription row.
     assert payload.receipt["method"] == "tempo"
+
+
+def _seed_one_time_purchase(
+    engine: Engine, wallet_address: str, article_id: UUID, *, tx_hash: str
+) -> str:
+    """Insert a one_time_purchases row directly; returns the tx hash."""
+    upsert_wallet_principal(engine, wallet_address)
+    insert_one_time_purchase(
+        engine,
+        OneTimePurchase(
+            article_slug=ARTICLE_SLUG,
+            wallet_address=wallet_address,
+            payment_reference=tx_hash,
+            amount=Decimal("0.25"),
+            currency=CURRENCY,
+            network=NETWORK,
+            recipient_wallet=PUBLISHER_RECIPIENT.lower(),
+            receipt={
+                "status": "success",
+                "timestamp": "2026-04-01T12:00:00+00:00",
+                "reference": tx_hash,
+                "method": "tempo",
+            },
+        ),
+        article_id,
+    )
+    return tx_hash
+
+
+def test_prior_purchase_serves_article_without_charging(
+    challenge_client: RouteClient,
+) -> None:
+    """Once paid, future reads of the same article succeed via WalletProof only."""
+    account = Account.create()
+    wallet_address = account.address.lower()
+    tx_hash = _seed_one_time_purchase(
+        challenge_client.engine,
+        wallet_address,
+        ARTICLE_ID,
+        tx_hash="0xprior-purchase",
+    )
+    nonce = create_challenge_nonce(challenge_client)
+    headers = wallet_proof_header(nonce, account)
+
+    response = challenge_client.client.get(
+        f"/articles/{ARTICLE_SLUG}/context", headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    payload = ContextPackage.model_validate(response.json())
+    assert payload.receipt["reference"] == tx_hash
+    parsed = Receipt.from_payment_receipt(response.headers["Payment-Receipt"])
+    assert parsed.reference == tx_hash
+    # Persistent-PPV branch must bypass MPP entirely.
+    assert challenge_client.mpp.calls == []
+
+
+def test_prior_purchase_does_not_unlock_other_articles(
+    challenge_client: RouteClient,
+) -> None:
+    """A purchase for article A must not entitle the wallet to article B."""
+    account = Account.create()
+    wallet_address = account.address.lower()
+    _seed_one_time_purchase(
+        challenge_client.engine,
+        wallet_address,
+        ARTICLE_ID,
+        tx_hash="0xprior-A",
+    )
+    nonce = create_challenge_nonce(challenge_client)
+    headers = wallet_proof_header(nonce, account)
+
+    response = challenge_client.client.get(
+        f"/articles/{ARTICLE_B_SLUG}/context", headers=headers
+    )
+
+    assert response.status_code == 402
+    # WalletProof was identified-but-not-entitled, so MPP saw no auth header.
+    assert challenge_client.mpp.calls
+    assert challenge_client.mpp.calls[0].authorization is None

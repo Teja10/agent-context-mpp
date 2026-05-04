@@ -205,6 +205,46 @@ def insert_one_time_purchase(
     return existing_purchase
 
 
+def get_one_time_purchase_for_article(
+    engine: Engine,
+    wallet_address: str,
+    article_id: UUID,
+) -> Optional[OneTimePurchase]:
+    """Return the wallet's existing one-time purchase for an article, if any.
+
+    The unique ``(wallet_address, article_id)`` constraint guarantees at most
+    one row matches, so this lookup encodes "has this wallet ever paid for
+    this article?" — the persistent-PPV entitlement.
+    """
+    with engine.connect() as connection:
+        row = (
+            connection.execute(
+                select(
+                    articles.c.slug.label("article_slug"),
+                    one_time_purchases.c.wallet_address,
+                    one_time_purchases.c.payment_reference,
+                    one_time_purchases.c.amount,
+                    one_time_purchases.c.currency,
+                    one_time_purchases.c.network,
+                    one_time_purchases.c.recipient_wallet,
+                    one_time_purchases.c.receipt,
+                )
+                .select_from(
+                    one_time_purchases.join(
+                        articles, one_time_purchases.c.article_id == articles.c.id
+                    )
+                )
+                .where(one_time_purchases.c.wallet_address == wallet_address)
+                .where(one_time_purchases.c.article_id == article_id)
+            )
+            .mappings()
+            .one_or_none()
+        )
+    if row is None:
+        return None
+    return _one_time_purchase(row)
+
+
 def lookup_purchase_by_payment_reference(
     engine: Engine,
     payment_reference: str,
