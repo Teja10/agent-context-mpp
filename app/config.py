@@ -1,5 +1,6 @@
 from typing import Literal
 
+from cryptography.fernet import Fernet, InvalidToken
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
@@ -28,6 +29,7 @@ class Settings(BaseSettings):
     mpp_secret_key: str = Field(alias="MPP_SECRET_KEY")
     pathusd_address: str = Field(alias="PATHUSD_ADDRESS")
     database_url: str = Field(alias="DATABASE_URL")
+    subscription_keystore_key: str = Field(alias="SUBSCRIPTION_KEYSTORE_KEY")
 
     def __init__(self) -> None:
         """Load settings from environment variables and validate."""
@@ -39,6 +41,17 @@ class Settings(BaseSettings):
         url = make_url(self.database_url)
         if url.drivername != "postgresql+psycopg":
             raise ValueError("DATABASE_URL must use postgresql+psycopg")
+        return self
+
+    @model_validator(mode="after")
+    def validate_subscription_keystore_key(self) -> "Settings":
+        """Validate the Fernet key used to encrypt subscription access keys."""
+        try:
+            Fernet(self.subscription_keystore_key.encode())
+        except (ValueError, InvalidToken) as err:
+            raise ValueError(
+                "SUBSCRIPTION_KEYSTORE_KEY must be a valid base64 Fernet key"
+            ) from err
         return self
 
     @property
