@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from app.auth import WalletPrincipal, require_wallet_principal
-from app.db.queries import (
+from app.db.publishers import (
     create_publisher,
     get_publisher_by_handle,
     update_publisher,

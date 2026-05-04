@@ -8,7 +8,8 @@ from eth_account.messages import encode_defunct
 from eth_account.signers.local import LocalAccount
 from sqlalchemy import text
 
-from app.db.queries import get_article_by_slug_for_owner, upsert_wallet_principal
+from app.db.articles import get_article_by_slug_for_owner
+from app.db.queries import upsert_wallet_principal
 from conftest import RouteClient
 
 

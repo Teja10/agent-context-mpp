@@ -13,7 +13,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy import text
 
 from app.config import Settings
-from app.db.queries import (
+from app.db.subscriptions import (
     insert_authorization_with_key,
     insert_subscription_period,
     select_due_renewals,

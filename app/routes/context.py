@@ -9,13 +9,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from mpp import Challenge, Receipt
 
 from app.auth import parse_wallet_address
-from app.db.queries import (
-    get_active_subscription,
-    get_article_by_slug,
+from app.db.articles import get_article_by_slug
+from app.db.publishers import get_publisher_by_id
+from app.db.purchases import (
     get_one_time_purchase_for_article,
-    get_publisher_by_id,
     insert_one_time_purchase,
 )
+from app.db.subscriptions import get_active_subscription
 from app.db.records import ArticleRecord, OneTimePurchase
 from app.models import ContextPackage
 from app.state import AppState, get_state

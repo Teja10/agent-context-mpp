@@ -3,9 +3,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.engine import Engine
 
-from app.db.queries import (
+from app.db.articles import list_articles
+from app.db.purchases import (
     insert_one_time_purchase,
-    list_articles,
     lookup_purchase_by_payment_reference,
 )
 from app.db.records import OneTimePurchase

@@ -15,11 +15,8 @@ from mpp.server.mpp import Mpp
 from sqlalchemy import insert, text
 from sqlalchemy.engine import Engine
 
-from app.db.queries import (
-    create_database_engine,
-    list_articles,
-    upsert_wallet_principal,
-)
+from app.db.articles import list_articles
+from app.db.queries import create_database_engine, upsert_wallet_principal
 from app.db.records import ArticleRecord
 from app.db.schema import articles, publishers as publishers_table
 from app.keystore import Keystore

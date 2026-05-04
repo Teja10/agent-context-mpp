@@ -10,16 +10,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.auth import WalletPrincipal, require_wallet_principal
-from app.db.queries import (
+from app.db.articles import (
     get_article_by_slug,
     get_article_by_slug_for_owner,
-    get_publisher_by_handle,
-    get_publisher_by_id,
     insert_article,
     list_article_metadata,
     publish_article,
     update_article,
 )
+from app.db.publishers import get_publisher_by_handle, get_publisher_by_id
 from app.db.records import ArticleRecord
 from app.models import ArticleMetadata
 from app.state import AppState, get_state

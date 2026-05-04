@@ -31,10 +31,10 @@ from pydantic import BaseModel, ConfigDict
 from pytempo import ACCOUNT_KEYCHAIN_ADDRESS
 
 from app.auth import WalletPrincipal, require_wallet_principal
-from app.db.queries import (
+from app.db.publishers import get_publisher_by_handle
+from app.db.subscriptions import (
     get_active_authorization,
     get_active_subscription,
-    get_publisher_by_handle,
     insert_authorization_with_key,
     insert_subscription_period,
     mark_authorization_status,

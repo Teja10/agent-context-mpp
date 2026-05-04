@@ -1,6 +1,6 @@
 from pydantic import TypeAdapter
 
-from app.db.queries import lookup_purchase_by_payment_reference
+from app.db.purchases import lookup_purchase_by_payment_reference
 from app.db.records import OneTimePurchase
 from app.models import ArticleMetadata, ContextPackage
 from mpp import Receipt

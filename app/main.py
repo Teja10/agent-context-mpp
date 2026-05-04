@@ -10,7 +10,7 @@ from app.keystore import Keystore
 from app.mpp_setup import create_mpp
 from app.routes import articles, auth, context, health, publishers, subscriptions
 from app.state import ActivationCache, AppState
-from app.tempo_keychain import LiveKeychain
+from app.tempo_keychain_live import LiveKeychain
 
 
 @asynccontextmanager
