@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import Decimal
 import os
@@ -7,6 +7,7 @@ from typing import Optional, cast
 from uuid import UUID
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from mpp import Challenge, ChallengeEcho, Credential, Receipt
@@ -21,14 +22,16 @@ from app.db.queries import (
 )
 from app.db.records import ArticleRecord
 from app.db.schema import articles, publishers as publishers_table
+from app.keystore import Keystore
 from app.routes import articles as article_routes
-from app.routes import auth, context, health, publishers
-from app.state import AppState
+from app.routes import auth, context, health, publishers, subscriptions
+from app.state import ActivationCache, AppState
+from app.tempo_keychain import Keychain, PeriodCharge
 
 ARTICLE_SLUG = "ai-agent-payments"
 CONTEXT_SLUG = "context-for-machines"
 TX_HASH = "0xtx"
-CURRENCY = "PATHUSD"
+CURRENCY = "0x20c0000000000000000000000000000000000000"
 NETWORK = "tempo"
 PAID_HEADERS = {"Authorization": "paid"}
 RECEIPT_PAYLOAD = {
@@ -103,6 +106,70 @@ class FakeMpp:
         return self.result
 
 
+@dataclass
+class FakeKeychain:
+    """In-memory Keychain that records calls and returns canned outcomes."""
+
+    verify_outcome: Optional[BaseException] = None
+    charge_outcomes: list[PeriodCharge | BaseException] = field(
+        default_factory=lambda: []
+    )
+    verify_calls: list[dict[str, object]] = field(default_factory=lambda: [])
+    charge_calls: list[dict[str, object]] = field(default_factory=lambda: [])
+
+    async def verify_authorize_key_tx(
+        self,
+        *,
+        wallet_address: str,
+        key_id: str,
+        expected_monthly_price: Decimal,
+        currency: str,
+        expected_expiry: datetime,
+        tx_hash: str,
+    ) -> None:
+        """Record verify call; raise the configured outcome if any."""
+        self.verify_calls.append(
+            {
+                "wallet_address": wallet_address,
+                "key_id": key_id,
+                "expected_monthly_price": expected_monthly_price,
+                "currency": currency,
+                "expected_expiry": expected_expiry,
+                "tx_hash": tx_hash,
+            }
+        )
+        if isinstance(self.verify_outcome, BaseException):
+            raise self.verify_outcome
+
+    async def submit_period_charge(
+        self,
+        *,
+        access_key_private_key: str,
+        wallet_address: str,
+        recipient: str,
+        currency: str,
+        monthly_price: Decimal,
+        memo: bytes,
+    ) -> PeriodCharge:
+        """Record charge call; return / raise the next configured outcome."""
+        self.charge_calls.append(
+            {
+                "access_key_private_key": access_key_private_key,
+                "wallet_address": wallet_address,
+                "recipient": recipient,
+                "currency": currency,
+                "monthly_price": monthly_price,
+                "memo": memo,
+            }
+        )
+        if not self.charge_outcomes:
+            raise AssertionError("FakeKeychain has no remaining charge outcomes")
+        outcome = self.charge_outcomes.pop(0)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return outcome
+
+
 @dataclass(frozen=True)
 class RouteClient:
     """Test client and resources configured for route tests."""
@@ -111,6 +178,9 @@ class RouteClient:
     engine: Engine
     articles: dict[str, ArticleRecord]
     mpp: FakeMpp
+    keystore: Keystore
+    keychain: FakeKeychain
+    activation_cache: ActivationCache
 
 
 @pytest.fixture
@@ -195,6 +265,66 @@ def paid_client(
     return _route_client(engine, article_catalog, fake_mpp)
 
 
+@pytest.fixture
+def subscription_client(
+    engine: Engine,
+    article_catalog: dict[str, ArticleRecord],
+    challenge: Challenge,
+) -> RouteClient:
+    """Return a route client wired with a configurable FakeKeychain."""
+    return _route_client(engine, article_catalog, FakeMpp(challenge), FakeKeychain())
+
+
+def create_challenge_nonce(client: RouteClient) -> str:
+    """Issue a fresh WalletProof challenge nonce via /auth/challenge."""
+    response = client.client.post("/auth/challenge")
+    assert response.status_code == 200
+    return cast(str, response.json()["challenge"])
+
+
+def wallet_proof_header(nonce: str, account: object) -> dict[str, str]:
+    """Build a WalletProof Authorization header for a signing account."""
+    from eth_account.messages import encode_defunct
+
+    message = encode_defunct(text=nonce)
+    signed = cast(object, account).sign_message(message)  # type: ignore[attr-defined]
+    signature = cast(bytes, signed.signature).hex()  # type: ignore[attr-defined]
+    return {"Authorization": f"WalletProof {nonce}.{signature}"}
+
+
+def subscription_count(engine: Engine) -> int:
+    """Return the number of persisted subscription period rows."""
+    with engine.connect() as connection:
+        return cast(
+            int,
+            connection.execute(text("select count(*) from subscriptions")).scalar_one(),
+        )
+
+
+def authorization_count(engine: Engine, status: Optional[str] = None) -> int:
+    """Return the number of subscription authorizations, optionally by status."""
+    if status is None:
+        sql = text("select count(*) from subscription_authorizations")
+        params: dict[str, object] = {}
+    else:
+        sql = text("select count(*) from subscription_authorizations where status = :s")
+        params = {"s": status}
+    with engine.connect() as connection:
+        return cast(int, connection.execute(sql, params).scalar_one())
+
+
+def authorization_status(engine: Engine, authorization_id: UUID) -> str:
+    """Return the persisted status for a given authorization id."""
+    with engine.connect() as connection:
+        return cast(
+            str,
+            connection.execute(
+                text("select status from subscription_authorizations where id = :id"),
+                {"id": authorization_id},
+            ).scalar_one(),
+        )
+
+
 def purchase_count(engine: Engine) -> int:
     """Return the number of persisted one-time purchases."""
     with engine.connect() as connection:
@@ -221,24 +351,35 @@ def _route_client(
     engine: Engine,
     article_catalog: dict[str, ArticleRecord],
     fake_mpp: FakeMpp,
+    fake_keychain: Optional[FakeKeychain] = None,
 ) -> RouteClient:
+    keystore = Keystore(Fernet.generate_key().decode())
+    keychain = fake_keychain if fake_keychain is not None else FakeKeychain()
+    activation_cache = ActivationCache()
     app = FastAPI()
     app.state.ctx = AppState(
         engine=engine,
         mpp=cast(Mpp, fake_mpp),
         pathusd_address=CURRENCY,
         tempo_network=NETWORK,
+        keystore=keystore,
+        keychain=cast(Keychain, keychain),
+        activation_cache=activation_cache,
     )
     app.include_router(health.router)
     app.include_router(article_routes.router)
     app.include_router(context.router)
     app.include_router(auth.router)
     app.include_router(publishers.router)
+    app.include_router(subscriptions.router)
     return RouteClient(
         client=TestClient(app),
         engine=engine,
         articles=article_catalog,
         mpp=fake_mpp,
+        keystore=keystore,
+        keychain=keychain,
+        activation_cache=activation_cache,
     )
 
 
@@ -248,6 +389,9 @@ def _truncate_age10_tables(engine: Engine) -> None:
             text(
                 """
                 truncate table
+                    subscription_renewal_attempts,
+                    subscription_authorization_keys,
+                    subscription_authorizations,
                     feedback,
                     usage_events,
                     subscriptions,
