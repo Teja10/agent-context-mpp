@@ -1,7 +1,7 @@
 """Typed dataclass records mapped from database rows."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -75,3 +75,46 @@ class OneTimePurchase:
     network: str
     recipient_wallet: str
     receipt: dict[str, str]
+
+
+@dataclass(frozen=True)
+class SubscriptionAuthorization:
+    """On-chain access-key authorization granting Thoth periodic charge rights."""
+
+    id: UUID
+    wallet_address: str
+    publisher_id: UUID
+    key_id: str
+    expiry: datetime
+    status: str
+    authorize_tx_hash: str
+
+
+@dataclass(frozen=True)
+class SubscriptionPeriod:
+    """One paid subscription period: a single transferWithMemo receipt."""
+
+    id: UUID
+    wallet_address: str
+    publisher_id: UUID
+    period_start: datetime
+    period_end: datetime
+    payment_reference: str
+    amount: Decimal
+    currency: str
+    network: str
+    receipt: dict[str, str]
+
+
+@dataclass(frozen=True)
+class DueRenewal:
+    """Authorization that needs a charge for the next period."""
+
+    authorization_id: UUID
+    wallet_address: str
+    publisher_id: UUID
+    key_id: str
+    expiry: datetime
+    last_period_end: datetime
+    attempts: int
+    last_attempt_at: Optional[datetime]

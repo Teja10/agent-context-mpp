@@ -8,12 +8,13 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     MetaData,
     Numeric,
     Table,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TEXT, UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import ARRAY, BYTEA, JSONB, TEXT, UUID as PG_UUID
 
 metadata = MetaData()
 
@@ -137,8 +138,8 @@ subscriptions = Table(
         ForeignKey("publishers.id"),
         nullable=False,
     ),
-    Column("period_start", Date, nullable=False),
-    Column("period_end", Date, nullable=False),
+    Column("period_start", DateTime(timezone=True), nullable=False),
+    Column("period_end", DateTime(timezone=True), nullable=False),
     Column("payment_reference", TEXT, nullable=False),
     Column("amount", Numeric(), nullable=False),
     Column("currency", TEXT, nullable=False),
@@ -196,4 +197,68 @@ Index(
     feedback.c.article_id,
     unique=True,
     postgresql_where=feedback.c.is_current.is_(True),
+)
+subscription_authorizations = Table(
+    "subscription_authorizations",
+    metadata,
+    Column("id", PG_UUID(as_uuid=True), primary_key=True),
+    Column(
+        "wallet_address",
+        TEXT,
+        ForeignKey("wallet_principals.wallet_address"),
+        nullable=False,
+    ),
+    Column(
+        "publisher_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("publishers.id"),
+        nullable=False,
+    ),
+    Column("key_id", TEXT, nullable=False),
+    Column("expiry", DateTime(timezone=True), nullable=False),
+    Column("status", TEXT, nullable=False),
+    Column("authorize_tx_hash", TEXT, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint(
+        "status IN ('active', 'cancelled', 'revoked', 'expired', 'renewal_failed')",
+        name="subscription_authorizations_status_valid",
+    ),
+    CheckConstraint("key_id <> ''", name="subscription_authorizations_key_id_nonempty"),
+    UniqueConstraint(
+        "authorize_tx_hash",
+        name="subscription_authorizations_authorize_tx_hash_key",
+    ),
+)
+Index(
+    "subscription_authorizations_one_active",
+    subscription_authorizations.c.wallet_address,
+    subscription_authorizations.c.publisher_id,
+    unique=True,
+    postgresql_where=subscription_authorizations.c.status == "active",
+)
+subscription_authorization_keys = Table(
+    "subscription_authorization_keys",
+    metadata,
+    Column(
+        "authorization_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("subscription_authorizations.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("ciphertext", BYTEA, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+subscription_renewal_attempts = Table(
+    "subscription_renewal_attempts",
+    metadata,
+    Column(
+        "authorization_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("subscription_authorizations.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("period_start", DateTime(timezone=True), primary_key=True),
+    Column("attempts", Integer, nullable=False, server_default="0"),
+    Column("last_attempt_at", DateTime(timezone=True), nullable=False),
+    Column("last_error", TEXT, nullable=True),
 )

@@ -1,6 +1,6 @@
 import pytest
 
-from app.db.queries import (
+from app.db.purchases import (
     insert_one_time_purchase,
     lookup_purchase_by_payment_reference,
 )
