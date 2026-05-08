@@ -1,7 +1,7 @@
 """Typed dataclass records mapped from database rows."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -19,7 +19,6 @@ class PublisherRecord:
     owner_address: str
     description: str
     status: str
-    recipient_address: str
     default_article_price: Decimal
     default_subscription_price: Decimal
 
@@ -33,7 +32,7 @@ class ArticleRecord:
     title: str
     status: str
     author: Optional[str]
-    published_date: Optional[date]
+    published_at: Optional[datetime]
     price: Optional[Decimal]
     license: Optional[str]
     summary: Optional[str]
@@ -43,18 +42,18 @@ class ArticleRecord:
     suggested_citation: Optional[str]
     slug: str
     body: str
-    publisher_recipient_address: str
+    publisher_owner_address: str
 
     @property
     def metadata(self) -> ArticleMetadata:
         """Return public metadata for this article."""
         assert self.author is not None
-        assert self.published_date is not None
+        assert self.published_at is not None
         assert self.price is not None
         return ArticleMetadata(
             title=self.title,
             author=self.author,
-            published_date=self.published_date,
+            published_at=self.published_at,
             price=str(self.price),
             slug=self.slug,
         )
@@ -73,5 +72,4 @@ class OneTimePurchase:
     amount: Decimal
     currency: str
     network: str
-    recipient_wallet: str
     receipt: dict[str, str]

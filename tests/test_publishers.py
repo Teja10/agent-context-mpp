@@ -45,7 +45,6 @@ def test_create_publisher_success(paid_client: RouteClient) -> None:
             "handle": "new-pub",
             "display_name": "New Publisher",
             "description": "A new publisher",
-            "recipient_address": account.address,
             "default_article_price": "0.50",
             "default_subscription_price": "10.00",
         },
@@ -75,7 +74,6 @@ def test_create_publisher_duplicate_handle_returns_409(
             "handle": "agent-context-research",
             "display_name": "Duplicate",
             "description": "Dup",
-            "recipient_address": account.address,
             "default_article_price": "1.00",
             "default_subscription_price": "5.00",
         },
@@ -103,7 +101,7 @@ def test_get_publisher_not_found_returns_404(paid_client: RouteClient) -> None:
 
 def test_patch_publisher_owner_success(paid_client: RouteClient) -> None:
     account = Account.create()
-    _insert_test_publisher(paid_client.engine, account, "patch-pub", account.address)
+    _insert_test_publisher(paid_client.engine, account, "patch-pub")
     headers = _auth_headers(paid_client, account)
 
     response = paid_client.client.patch(
@@ -180,7 +178,6 @@ def _insert_test_publisher(
     engine: Engine,
     account: LocalAccount,
     handle: str,
-    recipient_address: str,
 ) -> None:
     """Insert a test publisher owned by the given account."""
     upsert_wallet_principal(engine, account.address.lower())
@@ -190,11 +187,11 @@ def _insert_test_publisher(
                 """
                 INSERT INTO publishers
                     (id, handle, display_name, owner_address, description,
-                     status, recipient_address, default_article_price,
+                     status, default_article_price,
                      default_subscription_price, created_at)
                 VALUES
                     (gen_random_uuid(), :handle, :display_name, :owner_address,
-                     :description, 'active', :recipient_address, :article_price,
+                     :description, 'active', :article_price,
                      :subscription_price, now())
                 ON CONFLICT (handle) DO NOTHING
                 """
@@ -204,7 +201,6 @@ def _insert_test_publisher(
                 "display_name": "Test Publisher",
                 "owner_address": account.address.lower(),
                 "description": "Test",
-                "recipient_address": recipient_address,
                 "article_price": Decimal("0.50"),
                 "subscription_price": Decimal("5.00"),
             },

@@ -1,6 +1,6 @@
 """Tests for article draft, update, and publish endpoints."""
 
-from datetime import date
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from eth_account import Account
@@ -8,7 +8,11 @@ from eth_account.messages import encode_defunct
 from eth_account.signers.local import LocalAccount
 from sqlalchemy import text
 
-from app.db.queries import get_article_by_slug_for_owner, upsert_wallet_principal
+from app.db.queries import (
+    get_article_by_publisher_and_slug,
+    get_publisher_by_handle,
+    upsert_wallet_principal,
+)
 from conftest import RouteClient
 
 
@@ -70,11 +74,11 @@ def _setup_owned_publisher(client: RouteClient, account: LocalAccount) -> str:
                 """
                 INSERT INTO publishers
                     (id, handle, display_name, owner_address, description,
-                     status, recipient_address, default_article_price,
+                     status, default_article_price,
                      default_subscription_price, created_at)
                 VALUES
                     (gen_random_uuid(), :handle, :display_name, :owner_address,
-                     :description, 'active', :recipient_address, :article_price,
+                     :description, 'active', :article_price,
                      :subscription_price, now())
                 ON CONFLICT (handle) DO NOTHING
                 """
@@ -84,7 +88,6 @@ def _setup_owned_publisher(client: RouteClient, account: LocalAccount) -> str:
                 "display_name": "Test Publisher",
                 "owner_address": account.address.lower(),
                 "description": "Test",
-                "recipient_address": account.address,
                 "article_price": Decimal("0.50"),
                 "subscription_price": Decimal("5.00"),
             },
@@ -194,7 +197,7 @@ suggested_citation: "Updated cite."
 Updated body.
 """
     response = paid_client.client.patch(
-        "/articles/my-draft",
+        f"/publishers/{handle}/articles/my-draft",
         json={"markdown": updated_markdown},
         headers=headers,
     )
@@ -204,7 +207,11 @@ Updated body.
     assert data["slug"] == "my-draft"
     assert data["status"] == "draft"
 
-    record = get_article_by_slug_for_owner(paid_client.engine, "my-draft")
+    publisher = get_publisher_by_handle(paid_client.engine, handle)
+    assert publisher is not None
+    record = get_article_by_publisher_and_slug(
+        paid_client.engine, publisher.id, "my-draft"
+    )
     assert record is not None
     assert record.title == "Updated Title"
     assert record.author == "New Author"
@@ -226,7 +233,7 @@ def test_update_article_wrong_owner(paid_client: RouteClient) -> None:
     intruder_headers = _auth_headers(paid_client, intruder)
 
     response = paid_client.client.patch(
-        "/articles/my-draft",
+        f"/publishers/{handle}/articles/my-draft",
         json={"markdown": DRAFT_MARKDOWN},
         headers=intruder_headers,
     )
@@ -237,10 +244,11 @@ def test_update_article_wrong_owner(paid_client: RouteClient) -> None:
 def test_update_article_not_found(paid_client: RouteClient) -> None:
     """PATCH for nonexistent slug returns 404."""
     account = Account.create()
+    handle = _setup_owned_publisher(paid_client, account)
     headers = _auth_headers(paid_client, account)
 
     response = paid_client.client.patch(
-        "/articles/nonexistent-slug",
+        f"/publishers/{handle}/articles/nonexistent-slug",
         json={"markdown": DRAFT_MARKDOWN},
         headers=headers,
     )
@@ -260,7 +268,7 @@ def test_publish_article_success(paid_client: RouteClient) -> None:
         headers=headers,
     )
     response = paid_client.client.post(
-        "/articles/my-draft/publish",
+        f"/publishers/{handle}/articles/my-draft/publish",
         headers=headers,
     )
 
@@ -268,10 +276,15 @@ def test_publish_article_success(paid_client: RouteClient) -> None:
     data = response.json()
     assert data["status"] == "published"
 
-    record = get_article_by_slug_for_owner(paid_client.engine, "my-draft")
+    publisher = get_publisher_by_handle(paid_client.engine, handle)
+    assert publisher is not None
+    record = get_article_by_publisher_and_slug(
+        paid_client.engine, publisher.id, "my-draft"
+    )
     assert record is not None
     assert record.status == "published"
-    assert record.published_date == date.today()
+    assert record.published_at is not None
+    assert datetime.now(UTC) - record.published_at < timedelta(minutes=1)
 
     detail_response = paid_client.client.get("/articles/my-draft")
     assert detail_response.status_code == 200
@@ -289,7 +302,7 @@ def test_publish_missing_required_field(paid_client: RouteClient) -> None:
         headers=headers,
     )
     response = paid_client.client.post(
-        "/articles/minimal-draft/publish",
+        f"/publishers/{handle}/articles/minimal-draft/publish",
         headers=headers,
     )
 
@@ -311,7 +324,7 @@ def test_publish_wrong_owner(paid_client: RouteClient) -> None:
     intruder_headers = _auth_headers(paid_client, intruder)
 
     response = paid_client.client.post(
-        "/articles/my-draft/publish",
+        f"/publishers/{handle}/articles/my-draft/publish",
         headers=intruder_headers,
     )
 

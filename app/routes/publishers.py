@@ -5,12 +5,13 @@ from typing import Annotated, Literal, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth import WalletPrincipal, require_wallet_principal
 from app.db.queries import (
     create_publisher,
     get_publisher_by_handle,
+    list_publishers_by_owner,
     update_publisher,
 )
 from app.db.records import PublisherRecord
@@ -24,10 +25,9 @@ class CreatePublisher(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    handle: str
-    display_name: str
+    handle: str = Field(min_length=1)
+    display_name: str = Field(min_length=1)
     description: str
-    recipient_address: str
     default_article_price: Decimal
     default_subscription_price: Decimal
 
@@ -37,9 +37,8 @@ class PatchPublisher(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    display_name: Optional[str] = None
+    display_name: Optional[str] = Field(default=None, min_length=1)
     description: Optional[str] = None
-    recipient_address: Optional[str] = None
     status: Optional[Literal["active", "disabled"]] = None
     default_article_price: Optional[Decimal] = None
     default_subscription_price: Optional[Decimal] = None
@@ -54,7 +53,6 @@ def _publisher_dict(publisher: PublisherRecord) -> dict[str, object]:
         "owner_address": publisher.owner_address,
         "description": publisher.description,
         "status": publisher.status,
-        "recipient_address": publisher.recipient_address,
         "default_article_price": str(publisher.default_article_price),
         "default_subscription_price": str(publisher.default_subscription_price),
     }
@@ -86,13 +84,26 @@ def create_publisher_route(
         display_name=body.display_name,
         description=body.description,
         owner_address=principal.wallet_address,
-        recipient_address=body.recipient_address.lower(),
         default_article_price=body.default_article_price,
         default_subscription_price=body.default_subscription_price,
     )
     if publisher is None:
         raise HTTPException(status_code=409, detail="Handle already taken")
     return _publisher_dict(publisher)
+
+
+@router.get("/me/publishers")
+def list_my_publishers(
+    state: Annotated[AppState, Depends(get_state)],
+    principal: Annotated[WalletPrincipal, Depends(require_wallet_principal)],
+) -> list[dict[str, object]]:
+    """List publishers owned by the authenticated wallet."""
+    return [
+        _publisher_dict(publisher)
+        for publisher in list_publishers_by_owner(
+            state.engine, principal.wallet_address
+        )
+    ]
 
 
 @router.get("/publishers/{handle}")
@@ -141,8 +152,6 @@ def patch_publisher(
             422 if no fields provided.
     """
     values = body.model_dump(exclude_none=True)
-    if "recipient_address" in values:
-        values["recipient_address"] = str(values["recipient_address"]).lower()
     if len(values) == 0:
         raise HTTPException(status_code=422, detail="No fields to update")
     publisher = get_publisher_by_handle(state.engine, handle)

@@ -1,13 +1,11 @@
 """SQLAlchemy Core table definitions for the Thoth database."""
 
 from sqlalchemy import (
-    Boolean,
     CheckConstraint,
     Column,
     Date,
     DateTime,
     ForeignKey,
-    Index,
     MetaData,
     Numeric,
     Table,
@@ -38,12 +36,10 @@ publishers = Table(
     ),
     Column("description", TEXT, nullable=False),
     Column("status", TEXT, nullable=False),
-    Column("recipient_address", TEXT, nullable=False),
     Column("default_article_price", Numeric(), nullable=False),
     Column("default_subscription_price", Numeric(), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     UniqueConstraint("handle", name="publishers_handle_key"),
-    UniqueConstraint("recipient_address", name="publishers_recipient_key"),
     CheckConstraint("handle <> ''", name="publishers_handle_nonempty"),
     CheckConstraint("status IN ('active', 'disabled')", name="publishers_status_valid"),
     CheckConstraint(
@@ -68,7 +64,7 @@ articles = Table(
     Column("title", TEXT, nullable=False),
     Column("status", TEXT, nullable=False),
     Column("author", TEXT, nullable=True),
-    Column("published_at", Date, nullable=True),
+    Column("published_at", DateTime(timezone=True), nullable=True),
     Column("price", Numeric(), nullable=True),
     Column("license", TEXT, nullable=True),
     Column("summary", TEXT, nullable=True),
@@ -80,10 +76,27 @@ articles = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
     UniqueConstraint("publisher_id", "slug", name="articles_publisher_slug_key"),
-    UniqueConstraint("slug", name="articles_slug_key"),
     CheckConstraint("slug <> ''", name="articles_slug_nonempty"),
     CheckConstraint("price IS NULL OR price > 0", name="articles_price_positive"),
     CheckConstraint("status IN ('draft', 'published')", name="articles_status_valid"),
+    CheckConstraint(
+        """
+        status = 'draft' OR (
+            slug <> ''
+            AND title <> ''
+            AND author IS NOT NULL AND author <> ''
+            AND summary IS NOT NULL AND summary <> ''
+            AND license IS NOT NULL AND license <> ''
+            AND suggested_citation IS NOT NULL AND suggested_citation <> ''
+            AND tags IS NOT NULL AND cardinality(tags) > 0
+            AND key_claims IS NOT NULL AND cardinality(key_claims) > 0
+            AND allowed_excerpts IS NOT NULL AND cardinality(allowed_excerpts) > 0
+            AND price IS NOT NULL
+            AND published_at IS NOT NULL
+        )
+        """,
+        name="articles_published_complete",
+    ),
 )
 one_time_purchases = Table(
     "one_time_purchases",
@@ -102,12 +115,8 @@ one_time_purchases = Table(
     Column("amount", Numeric(), nullable=False),
     Column("currency", TEXT, nullable=False),
     Column("network", TEXT, nullable=False),
-    Column("recipient_wallet", TEXT, nullable=False),
     Column("receipt", JSONB, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
-    CheckConstraint(
-        "recipient_wallet <> ''", name="one_time_purchases_recipient_nonempty"
-    ),
     UniqueConstraint(
         "payment_reference", name="one_time_purchases_payment_reference_key"
     ),
@@ -155,45 +164,4 @@ subscriptions = Table(
     ),
     CheckConstraint("period_end > period_start", name="subscriptions_period_valid"),
     CheckConstraint("amount > 0", name="subscriptions_amount_positive"),
-)
-usage_events = Table(
-    "usage_events",
-    metadata,
-    Column("id", PG_UUID(as_uuid=True), primary_key=True),
-    Column(
-        "wallet_address",
-        TEXT,
-        ForeignKey("wallet_principals.wallet_address"),
-        nullable=False,
-    ),
-    Column(
-        "article_id", PG_UUID(as_uuid=True), ForeignKey("articles.id"), nullable=False
-    ),
-    Column("event_type", TEXT, nullable=False),
-    Column("created_at", DateTime(timezone=True), nullable=False),
-    CheckConstraint("event_type <> ''", name="usage_events_type_nonempty"),
-)
-feedback = Table(
-    "feedback",
-    metadata,
-    Column("id", PG_UUID(as_uuid=True), primary_key=True),
-    Column(
-        "wallet_address",
-        TEXT,
-        ForeignKey("wallet_principals.wallet_address"),
-        nullable=False,
-    ),
-    Column(
-        "article_id", PG_UUID(as_uuid=True), ForeignKey("articles.id"), nullable=False
-    ),
-    Column("is_current", Boolean, nullable=False),
-    Column("body", TEXT, nullable=False),
-    Column("created_at", DateTime(timezone=True), nullable=False),
-)
-Index(
-    "feedback_one_current_per_wallet_article",
-    feedback.c.wallet_address,
-    feedback.c.article_id,
-    unique=True,
-    postgresql_where=feedback.c.is_current.is_(True),
 )

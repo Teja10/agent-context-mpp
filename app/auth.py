@@ -1,7 +1,7 @@
 """Wallet principal authentication via EIP-191 signature proof."""
 
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Optional
 
 from eth_account import Account
 from eth_account.messages import encode_defunct
@@ -109,3 +109,17 @@ def require_wallet_principal(
         raise HTTPException(status_code=401, detail="Invalid wallet proof")
     upsert_wallet_principal(state.engine, wallet_address)
     return WalletPrincipal(wallet_address=wallet_address)
+
+
+def optional_wallet_principal(
+    request: Request,
+    state: Annotated[AppState, Depends(get_state)],
+) -> Optional[WalletPrincipal]:
+    """Return a WalletPrincipal if Authorization is present and valid; else None.
+
+    A missing Authorization header yields None. A present-but-invalid header
+    raises 401 — silently dropping bad credentials would mask client bugs.
+    """
+    if request.headers.get("Authorization") is None:
+        return None
+    return require_wallet_principal(request, state)

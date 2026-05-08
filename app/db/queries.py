@@ -1,11 +1,10 @@
 """Database query and engine functions."""
 
-from datetime import date
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import create_engine, select, text, update
+from sqlalchemy import create_engine, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine, RowMapping
 
@@ -62,7 +61,7 @@ def list_article_metadata(engine: Engine) -> list[ArticleMetadata]:
             ArticleMetadata(
                 title=row["title"],
                 author=row["author"],
-                published_date=row["published_at"],
+                published_at=row["published_at"],
                 price=str(row["price"]),
                 slug=row["slug"],
             )
@@ -76,7 +75,7 @@ def list_articles(engine: Engine) -> list[ArticleRecord]:
         rows = connection.execute(
             select(
                 articles,
-                publishers.c.recipient_address.label("publisher_recipient_address"),
+                publishers.c.owner_address.label("publisher_owner_address"),
             )
             .select_from(
                 articles.join(publishers, articles.c.publisher_id == publishers.c.id)
@@ -93,7 +92,7 @@ def get_article_by_slug(engine: Engine, slug: str) -> Optional[ArticleRecord]:
             connection.execute(
                 select(
                     articles,
-                    publishers.c.recipient_address.label("publisher_recipient_address"),
+                    publishers.c.owner_address.label("publisher_owner_address"),
                 )
                 .select_from(
                     articles.join(
@@ -111,28 +110,23 @@ def get_article_by_slug(engine: Engine, slug: str) -> Optional[ArticleRecord]:
     return _article_record(row)
 
 
-def get_article_by_slug_for_owner(engine: Engine, slug: str) -> Optional[ArticleRecord]:
-    """Return one article by slug regardless of status, joined with its publisher.
-
-    Args:
-        engine: SQLAlchemy engine.
-        slug: Article slug.
-
-    Returns:
-        ArticleRecord if found, None otherwise.
-    """
+def get_article_by_publisher_and_slug(
+    engine: Engine, publisher_id: UUID, slug: str
+) -> Optional[ArticleRecord]:
+    """Return one article by (publisher_id, slug) regardless of status."""
     with engine.connect() as connection:
         row = (
             connection.execute(
                 select(
                     articles,
-                    publishers.c.recipient_address.label("publisher_recipient_address"),
+                    publishers.c.owner_address.label("publisher_owner_address"),
                 )
                 .select_from(
                     articles.join(
                         publishers, articles.c.publisher_id == publishers.c.id
                     )
                 )
+                .where(articles.c.publisher_id == publisher_id)
                 .where(articles.c.slug == slug)
             )
             .mappings()
@@ -141,6 +135,41 @@ def get_article_by_slug_for_owner(engine: Engine, slug: str) -> Optional[Article
     if row is None:
         return None
     return _article_record(row)
+
+
+def list_articles_by_publisher(
+    engine: Engine, publisher_id: UUID, include_drafts: bool
+) -> list[ArticleRecord]:
+    """Return articles for one publisher, optionally including drafts."""
+    statement = (
+        select(
+            articles,
+            publishers.c.owner_address.label("publisher_owner_address"),
+        )
+        .select_from(
+            articles.join(publishers, articles.c.publisher_id == publishers.c.id)
+        )
+        .where(articles.c.publisher_id == publisher_id)
+        .order_by(articles.c.slug)
+    )
+    if not include_drafts:
+        statement = statement.where(articles.c.status == "published")
+    with engine.connect() as connection:
+        rows = connection.execute(statement)
+        return [_article_record(row) for row in rows.mappings()]
+
+
+def list_publishers_by_owner(
+    engine: Engine, owner_address: str
+) -> list[PublisherRecord]:
+    """Return all publishers owned by the given wallet."""
+    with engine.connect() as connection:
+        rows = connection.execute(
+            select(publishers)
+            .where(publishers.c.owner_address == owner_address)
+            .order_by(publishers.c.handle)
+        )
+        return [_publisher_record(row) for row in rows.mappings()]
 
 
 def upsert_wallet_principal(engine: Engine, address: str) -> None:
@@ -176,9 +205,8 @@ def insert_one_time_purchase(
                 amount=purchase.amount,
                 currency=purchase.currency,
                 network=purchase.network,
-                recipient_wallet=purchase.recipient_wallet,
                 receipt=purchase.receipt,
-                created_at=text("now()"),
+                created_at=func.now(),
             )
             .on_conflict_do_nothing()
         )
@@ -209,7 +237,6 @@ def lookup_purchase_by_payment_reference(
                     one_time_purchases.c.amount,
                     one_time_purchases.c.currency,
                     one_time_purchases.c.network,
-                    one_time_purchases.c.recipient_wallet,
                     one_time_purchases.c.receipt,
                 )
                 .select_from(
@@ -235,7 +262,7 @@ def _article_record(row: RowMapping) -> ArticleRecord:
         title=row["title"],
         status=row["status"],
         author=row["author"],
-        published_date=row["published_at"],
+        published_at=row["published_at"],
         price=row["price"],
         license=row["license"],
         summary=row["summary"],
@@ -249,7 +276,7 @@ def _article_record(row: RowMapping) -> ArticleRecord:
         suggested_citation=row["suggested_citation"],
         slug=row["slug"],
         body=row["body"],
-        publisher_recipient_address=row["publisher_recipient_address"],
+        publisher_owner_address=row["publisher_owner_address"],
     )
 
 
@@ -291,37 +318,34 @@ def insert_article(
         ArticleRecord if inserted, None if slug conflict.
     """
     with engine.begin() as connection:
-        inserted_slug = (
-            connection.execute(
-                insert(articles)
-                .values(
-                    id=article_id,
-                    publisher_id=publisher_id,
-                    slug=slug,
-                    title=title,
-                    status="draft",
-                    author=author,
-                    price=price,
-                    license=license,
-                    summary=summary,
-                    tags=tags,
-                    key_claims=key_claims,
-                    allowed_excerpts=allowed_excerpts,
-                    suggested_citation=suggested_citation,
-                    body=body,
-                    created_at=text("now()"),
-                    updated_at=text("now()"),
-                )
-                .on_conflict_do_nothing(
-                    constraint="articles_publisher_slug_key",
-                )
-                .returning(articles.c.slug)
+        inserted_slug = connection.execute(
+            insert(articles)
+            .values(
+                id=article_id,
+                publisher_id=publisher_id,
+                slug=slug,
+                title=title,
+                status="draft",
+                author=author,
+                price=price,
+                license=license,
+                summary=summary,
+                tags=tags,
+                key_claims=key_claims,
+                allowed_excerpts=allowed_excerpts,
+                suggested_citation=suggested_citation,
+                body=body,
+                created_at=func.now(),
+                updated_at=func.now(),
             )
-            .scalar_one_or_none()
-        )
+            .on_conflict_do_nothing(
+                constraint="articles_publisher_slug_key",
+            )
+            .returning(articles.c.slug)
+        ).scalar_one_or_none()
     if inserted_slug is None:
         return None
-    return get_article_by_slug_for_owner(engine, inserted_slug)
+    return get_article_by_publisher_and_slug(engine, publisher_id, inserted_slug)
 
 
 def update_article(
@@ -335,7 +359,7 @@ def update_article(
         publisher_id: Publisher UUID (ownership filter).
         values: Column-value pairs to update.
     """
-    values["updated_at"] = text("now()")
+    values["updated_at"] = func.now()
     with engine.begin() as connection:
         connection.execute(
             update(articles)
@@ -360,8 +384,8 @@ def publish_article(engine: Engine, slug: str, publisher_id: UUID) -> None:
             .where(articles.c.publisher_id == publisher_id)
             .values(
                 status="published",
-                published_at=date.today(),
-                updated_at=text("now()"),
+                published_at=func.now(),
+                updated_at=func.now(),
             )
         )
 
@@ -373,7 +397,6 @@ def create_publisher(
     display_name: str,
     description: str,
     owner_address: str,
-    recipient_address: str,
     default_article_price: Decimal,
     default_subscription_price: Decimal,
 ) -> Optional[PublisherRecord]:
@@ -385,8 +408,7 @@ def create_publisher(
         handle: Unique publisher handle.
         display_name: Display name.
         description: Publisher description.
-        owner_address: Wallet address of the owner.
-        recipient_address: Payment recipient address.
+        owner_address: Wallet address of the owner (also the payout recipient).
         default_article_price: Default price for articles.
         default_subscription_price: Default price for subscriptions.
 
@@ -403,10 +425,9 @@ def create_publisher(
                 owner_address=owner_address,
                 description=description,
                 status="active",
-                recipient_address=recipient_address,
                 default_article_price=default_article_price,
                 default_subscription_price=default_subscription_price,
-                created_at=text("now()"),
+                created_at=func.now(),
             )
             .on_conflict_do_nothing(index_elements=[publishers.c.handle])
             .returning(publishers.c.id)
@@ -420,7 +441,6 @@ def create_publisher(
         owner_address=owner_address,
         description=description,
         status="active",
-        recipient_address=recipient_address,
         default_article_price=default_article_price,
         default_subscription_price=default_subscription_price,
     )
@@ -494,7 +514,6 @@ def _publisher_record(row: RowMapping) -> PublisherRecord:
         owner_address=row["owner_address"],
         description=row["description"],
         status=row["status"],
-        recipient_address=row["recipient_address"],
         default_article_price=row["default_article_price"],
         default_subscription_price=row["default_subscription_price"],
     )
@@ -508,6 +527,5 @@ def _one_time_purchase(row: RowMapping) -> OneTimePurchase:
         amount=row["amount"],
         currency=row["currency"],
         network=row["network"],
-        recipient_wallet=row["recipient_wallet"],
         receipt=dict(row["receipt"]),
     )

@@ -171,7 +171,6 @@ def _insert_publisher_for_account(engine: Engine, account: LocalAccount) -> None
                 owner_address=account.address.lower(),
                 description="Test publisher",
                 status="active",
-                recipient_address=account.address,
                 default_article_price=Decimal("0.50"),
                 default_subscription_price=Decimal("5.00"),
                 created_at=datetime.now(UTC),

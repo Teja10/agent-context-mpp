@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -10,7 +10,7 @@ class ArticleMetadata(BaseModel):
 
     title: str
     author: str
-    published_date: date
+    published_at: datetime
     price: str
     slug: str
 
