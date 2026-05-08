@@ -7,20 +7,24 @@ from uuid import uuid4
 
 import frontmatter  # type: ignore[import-untyped]
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from app.auth import WalletPrincipal, require_wallet_principal
+from app.auth import (
+    WalletPrincipal,
+    optional_wallet_principal,
+    require_wallet_principal,
+)
 from app.db.queries import (
+    get_article_by_publisher_and_slug,
     get_article_by_slug,
-    get_article_by_slug_for_owner,
     get_publisher_by_handle,
-    get_publisher_by_id,
     insert_article,
     list_article_metadata,
+    list_articles_by_publisher,
     publish_article,
     update_article,
 )
-from app.db.records import ArticleRecord
+from app.db.records import ArticleRecord, PublisherRecord
 from app.models import ArticleMetadata
 from app.state import AppState, get_state
 
@@ -32,8 +36,8 @@ class ArticleFrontmatter(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    slug: str
-    title: str
+    slug: str = Field(min_length=1)
+    title: str = Field(min_length=1)
     author: Optional[str] = None
     price: Optional[Decimal] = None
     license: Optional[str] = None
@@ -80,6 +84,50 @@ def _parse_frontmatter(markdown: str) -> ParsedMarkdown:
     return ParsedMarkdown(meta=fm, body=post.content)
 
 
+def _serialize_markdown(article: ArticleRecord) -> str:
+    """Reconstruct the markdown document (frontmatter + body) for an article."""
+    metadata: dict[str, object] = {"slug": article.slug, "title": article.title}
+    optional_fields: list[tuple[str, object]] = [
+        ("author", article.author),
+        ("price", str(article.price) if article.price is not None else None),
+        ("license", article.license),
+        ("summary", article.summary),
+        ("tags", article.tags),
+        ("key_claims", article.key_claims),
+        ("allowed_excerpts", article.allowed_excerpts),
+        ("suggested_citation", article.suggested_citation),
+    ]
+    for key, value in optional_fields:
+        if value is not None:
+            metadata[key] = value
+    post = frontmatter.Post(article.body)
+    post.metadata = metadata
+    return frontmatter.dumps(post)
+
+
+def _require_owned_publisher(
+    state: AppState, handle: str, principal: WalletPrincipal
+) -> PublisherRecord:
+    """Load a publisher by handle and verify the principal owns it."""
+    publisher = get_publisher_by_handle(state.engine, handle)
+    if publisher is None:
+        raise HTTPException(status_code=404, detail="Publisher not found")
+    if principal.wallet_address != publisher.owner_address:
+        raise HTTPException(status_code=403, detail="Wallet does not own publisher")
+    return publisher
+
+
+def _require_owned_article(
+    state: AppState, handle: str, slug: str, principal: WalletPrincipal
+) -> tuple[PublisherRecord, ArticleRecord]:
+    """Load (publisher, article) and verify the principal owns the publisher."""
+    publisher = _require_owned_publisher(state, handle, principal)
+    article = get_article_by_publisher_and_slug(state.engine, publisher.id, slug)
+    if article is None:
+        raise HTTPException(status_code=404, detail="Article not found")
+    return publisher, article
+
+
 @router.get("/articles")
 def get_articles(
     state: Annotated[AppState, Depends(get_state)],
@@ -100,6 +148,42 @@ def get_article(
     return article.metadata
 
 
+def _article_summary(article: ArticleRecord) -> dict[str, object]:
+    """Serialize a list-view article entry for publisher dashboards."""
+    return {
+        "slug": article.slug,
+        "title": article.title,
+        "status": article.status,
+        "price": str(article.price) if article.price is not None else None,
+        "published_at": (
+            article.published_at.isoformat()
+            if article.published_at is not None
+            else None
+        ),
+    }
+
+
+@router.get("/publishers/{handle}/articles")
+def list_publisher_articles(
+    handle: str,
+    state: Annotated[AppState, Depends(get_state)],
+    principal: Annotated[Optional[WalletPrincipal], Depends(optional_wallet_principal)],
+) -> list[dict[str, object]]:
+    """List a publisher's articles. Owner sees drafts; others see published only."""
+    publisher = get_publisher_by_handle(state.engine, handle)
+    if publisher is None:
+        raise HTTPException(status_code=404, detail="Publisher not found")
+    is_owner = (
+        principal is not None and principal.wallet_address == publisher.owner_address
+    )
+    return [
+        _article_summary(article)
+        for article in list_articles_by_publisher(
+            state.engine, publisher.id, include_drafts=is_owner
+        )
+    ]
+
+
 @router.post("/publishers/{handle}/articles", status_code=201)
 def create_article_draft(
     handle: str,
@@ -107,26 +191,8 @@ def create_article_draft(
     state: Annotated[AppState, Depends(get_state)],
     principal: Annotated[WalletPrincipal, Depends(require_wallet_principal)],
 ) -> dict[str, object]:
-    """Create a draft article from Markdown with frontmatter.
-
-    Args:
-        handle: Publisher handle.
-        body: Request body with markdown field.
-        state: Application state.
-        principal: Authenticated wallet principal.
-
-    Returns:
-        Created article fields.
-
-    Raises:
-        HTTPException: 404 publisher not found, 403 wrong owner,
-            422 bad frontmatter, 409 slug conflict.
-    """
-    publisher = get_publisher_by_handle(state.engine, handle)
-    if publisher is None:
-        raise HTTPException(status_code=404, detail="Publisher not found")
-    if principal.wallet_address != publisher.owner_address:
-        raise HTTPException(status_code=403, detail="Wallet does not own publisher")
+    """Create a draft article from Markdown with frontmatter."""
+    publisher = _require_owned_publisher(state, handle, principal)
     parsed = _parse_frontmatter(body.markdown)
     fm = parsed.meta
     record = insert_article(
@@ -150,55 +216,32 @@ def create_article_draft(
     return {"id": str(record.id), "slug": record.slug, "status": record.status}
 
 
-def _require_owned_article(
-    state: AppState, slug: str, principal: WalletPrincipal
-) -> ArticleRecord:
-    """Load an article and verify ownership, raising on 404/403.
-
-    Args:
-        state: Application state.
-        slug: Article slug.
-        principal: Authenticated wallet principal.
-
-    Returns:
-        ArticleRecord owned by the principal.
-
-    Raises:
-        HTTPException: 404 if not found, 403 if not owner.
-    """
-    article = get_article_by_slug_for_owner(state.engine, slug)
-    if article is None:
-        raise HTTPException(status_code=404, detail="Article not found")
-    publisher = get_publisher_by_id(state.engine, article.publisher_id)
-    if publisher is None:
-        raise RuntimeError(f"Article {article.id} has no publisher")
-    if principal.wallet_address != publisher.owner_address:
-        raise HTTPException(status_code=403, detail="Wallet does not own publisher")
-    return article
+@router.get("/publishers/{handle}/articles/{slug}")
+def get_owned_article(
+    handle: str,
+    slug: str,
+    state: Annotated[AppState, Depends(get_state)],
+    principal: Annotated[WalletPrincipal, Depends(require_wallet_principal)],
+) -> dict[str, object]:
+    """Return the markdown document for an owned article (draft or published)."""
+    _, article = _require_owned_article(state, handle, slug, principal)
+    return {
+        "slug": article.slug,
+        "status": article.status,
+        "markdown": _serialize_markdown(article),
+    }
 
 
-@router.patch("/articles/{slug}")
+@router.patch("/publishers/{handle}/articles/{slug}")
 def patch_article(
+    handle: str,
     slug: str,
     body: MarkdownBody,
     state: Annotated[AppState, Depends(get_state)],
     principal: Annotated[WalletPrincipal, Depends(require_wallet_principal)],
 ) -> dict[str, object]:
-    """Update an existing article from Markdown with frontmatter.
-
-    Args:
-        slug: Article slug (URL lookup key).
-        body: Request body with markdown field.
-        state: Application state.
-        principal: Authenticated wallet principal.
-
-    Returns:
-        Updated article slug and status.
-
-    Raises:
-        HTTPException: 404 not found, 403 wrong owner, 422 bad frontmatter.
-    """
-    article = _require_owned_article(state, slug, principal)
+    """Update an existing article from Markdown with frontmatter."""
+    publisher, article = _require_owned_article(state, handle, slug, principal)
     parsed = _parse_frontmatter(body.markdown)
     fm = parsed.meta
     values: dict[str, object] = {
@@ -214,31 +257,19 @@ def patch_article(
         "allowed_excerpts": fm.allowed_excerpts,
         "suggested_citation": fm.suggested_citation,
     }
-    update_article(state.engine, slug, article.publisher_id, values)
+    update_article(state.engine, slug, publisher.id, values)
     return {"slug": fm.slug, "status": article.status}
 
 
-@router.post("/articles/{slug}/publish")
+@router.post("/publishers/{handle}/articles/{slug}/publish")
 def publish_article_route(
+    handle: str,
     slug: str,
     state: Annotated[AppState, Depends(get_state)],
     principal: Annotated[WalletPrincipal, Depends(require_wallet_principal)],
 ) -> dict[str, object]:
-    """Publish a draft article after validating required fields.
-
-    Args:
-        slug: Article slug.
-        state: Application state.
-        principal: Authenticated wallet principal.
-
-    Returns:
-        Published article slug and status.
-
-    Raises:
-        HTTPException: 404 not found, 403 wrong owner,
-            422 missing required fields.
-    """
-    article = _require_owned_article(state, slug, principal)
+    """Publish a draft article after validating required fields."""
+    publisher, article = _require_owned_article(state, handle, slug, principal)
     missing: list[str] = []
     if not article.title:
         missing.append("title")
@@ -264,5 +295,5 @@ def publish_article_route(
         raise HTTPException(
             status_code=422, detail=f"Missing required fields: {', '.join(missing)}"
         )
-    publish_article(state.engine, slug, article.publisher_id)
+    publish_article(state.engine, slug, publisher.id)
     return {"slug": article.slug, "status": "published"}

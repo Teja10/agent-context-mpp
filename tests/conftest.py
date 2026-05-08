@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 import os
 from typing import Optional, cast
@@ -38,14 +38,14 @@ RECEIPT_PAYLOAD = {
     "method": "tempo",
 }
 PUBLISHER_ID = UUID("11111111-1111-1111-1111-111111111111")
-PUBLISHER_RECIPIENT = "0x52908400098527886E0F7030069857D2E4169EE7"
 ARTICLE_ID = UUID("22222222-2222-2222-2222-222222222222")
 CONTEXT_ID = UUID("33333333-3333-3333-3333-333333333333")
 IDENTITY_ID = UUID("44444444-4444-4444-4444-444444444444")
 PUBLISHER_B_ID = UUID("77777777-7777-7777-7777-777777777777")
-PUBLISHER_B_RECIPIENT = "0xDE709f2102306220921060314715629080e2fB77"
 ARTICLE_B_ID = UUID("88888888-8888-8888-8888-888888888888")
 ARTICLE_B_SLUG = "publisher-b-article"
+OWNER_ADDRESS = "0x52908400098527886e0f7030069857d2e4169ee7"
+OWNER_B_ADDRESS = "0xde709f2102306220921060314715629080e2fb77"
 
 
 @dataclass(frozen=True)
@@ -248,8 +248,6 @@ def _truncate_age10_tables(engine: Engine) -> None:
             text(
                 """
                 truncate table
-                    feedback,
-                    usage_events,
                     subscriptions,
                     one_time_purchases,
                     articles,
@@ -261,12 +259,10 @@ def _truncate_age10_tables(engine: Engine) -> None:
         )
 
 
-OWNER_ADDRESS = "0x52908400098527886e0f7030069857d2e4169ee7"
-
-
 def _insert_article_catalog(engine: Engine) -> None:
     created_at = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
     upsert_wallet_principal(engine, OWNER_ADDRESS)
+    upsert_wallet_principal(engine, OWNER_B_ADDRESS)
     with engine.begin() as connection:
         connection.execute(
             insert(publishers_table).values(
@@ -276,7 +272,6 @@ def _insert_article_catalog(engine: Engine) -> None:
                 owner_address=OWNER_ADDRESS,
                 description="Research publisher",
                 status="active",
-                recipient_address=PUBLISHER_RECIPIENT,
                 default_article_price=Decimal("0.25"),
                 default_subscription_price=Decimal("5.00"),
                 created_at=created_at,
@@ -287,10 +282,9 @@ def _insert_article_catalog(engine: Engine) -> None:
                 id=PUBLISHER_B_ID,
                 handle="publisher-b",
                 display_name="Publisher B",
-                owner_address=OWNER_ADDRESS,
+                owner_address=OWNER_B_ADDRESS,
                 description="Publisher B",
                 status="active",
-                recipient_address=PUBLISHER_B_RECIPIENT,
                 default_article_price=Decimal("0.50"),
                 default_subscription_price=Decimal("10.00"),
                 created_at=created_at,
@@ -350,7 +344,7 @@ def _article_values(
         "title": title,
         "status": "published",
         "author": "Agent Context Research",
-        "published_at": date(2026, 4, 29),
+        "published_at": datetime(2026, 4, 29, 0, 0, tzinfo=UTC),
         "price": price,
         "license": "Context preview license",
         "summary": f"{title} summary.",
