@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+:root {
+  --ivory: #fafaf8;
+  --parchment: #fdfcf9;
+  --sand: #f5f0e8;
+  --tan: #f0e8d8;
+  --khaki: #e8dcc8;
+  --camel: #d4c5a9;
+  --brass: #c9a962;
+  --stone: #a89880;
+  --umber: #8b7355;
+  --walnut: #6b5d4f;
+  --espresso: #2c2416;
+
+  --status-published-bg: #e8f5e8;
+  --status-published-text: #3a7a3a;
+}
+
+@theme inline {
+  --color-ivory: var(--ivory);
+  --color-parchment: var(--parchment);
+  --color-sand: var(--sand);
+  --color-tan: var(--tan);
+  --color-khaki: var(--khaki);
+  --color-camel: var(--camel);
+  --color-brass: var(--brass);
+  --color-stone: var(--stone);
+  --color-umber: var(--umber);
+  --color-walnut: var(--walnut);
+  --color-espresso: var(--espresso);
+
+  --color-status-published-bg: var(--status-published-bg);
+  --color-status-published-text: var(--status-published-text);
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans: system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background: var(--ivory);
+  color: var(--espresso);
+  font-family: var(--font-sans);
+}

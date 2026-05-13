@@ -1,6 +1,9 @@
 CLAUDE.md
 .claude/
 .env
+.DS_Store
+
+# Python
 .venv/
 *.db
 __pycache__/
@@ -13,3 +16,12 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+.uv-cache/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+
+# Superpowers
+.superpowers/
